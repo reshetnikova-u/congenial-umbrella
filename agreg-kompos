@@ -1,0 +1,294 @@
+import java.util.ArrayList;
+import java.util.List;
+
+// ============ АГРЕГАЦИЯ ============
+// Отношение "часть-целое", где часть может существовать независимо от целого
+
+class Engine {
+    private String model;
+    private int power;
+    
+    public Engine(String model, int power) {
+        this.model = model;
+        this.power = power;
+    }
+    
+    public void start() {
+        System.out.println("Двигатель " + model + " (" + power + " л.с.) запущен");
+    }
+    
+    // Двигатель может существовать отдельно от автомобиля
+}
+
+class Car {
+    private String brand;
+    private String model;
+    private Engine engine; // АГРЕГАЦИЯ - двигатель может жить отдельно
+    
+    public Car(String brand, String model, Engine engine) {
+        this.brand = brand;
+        this.model = model;
+        this.engine = engine; // Получаем двигатель извне
+    }
+    
+    public void startCar() {
+        System.out.print(brand + " " + model + ": ");
+        engine.start(); // Используем двигатель
+    }
+    
+    public void changeEngine(Engine newEngine) {
+        this.engine = newEngine; // Можем заменить двигатель
+        System.out.println("Двигатель заменен");
+    }
+    
+    // При уничтожении автомобиля двигатель НЕ уничтожается
+}
+
+// ============ КОМПОЗИЦИЯ ============
+// Более сильная форма агрегации, где часть не может существовать без целого
+
+class Heart {
+    private int beatsPerMinute;
+    
+    public Heart(int beatsPerMinute) {
+        this.beatsPerMinute = beatsPerMinute;
+    }
+    
+    public void beat() {
+        System.out.println("Сердце бьется: " + beatsPerMinute + " уд./мин");
+    }
+    
+    // Сердце не имеет смысла вне тела
+}
+
+class Human {
+    private String name;
+    private Heart heart; // КОМПОЗИЦИЯ - сердце создается вместе с человеком
+    
+    public Human(String name) {
+        this.name = name;
+        this.heart = new Heart(72); // Создаем сердце внутри конструктора
+    }
+    
+    public void live() {
+        System.out.print(name + ": ");
+        heart.beat();
+    }
+    
+    // Нет метода для изменения сердца (обычно)
+    // При уничтожении человека сердце тоже уничтожается
+}
+
+// ============ БОЛЕЕ СЛОЖНЫЙ ПРИМЕР ============
+
+// Деталь (может существовать отдельно)
+class Wheel {
+    private int diameter;
+    
+    public Wheel(int diameter) {
+        this.diameter = diameter;
+    }
+    
+    public void rotate() {
+        System.out.println("Колесо диаметром " + diameter + " дюймов вращается");
+    }
+}
+
+// Комната (не может существовать без дома)
+class Room {
+    private String type;
+    private double area;
+    
+    public Room(String type, double area) {
+        this.type = type;
+        this.area = area;
+    }
+    
+    public void describe() {
+        System.out.println(type + " площадью " + area + " кв.м");
+    }
+}
+
+// Дом (содержит комнаты как композицию)
+class House {
+    private String address;
+    private List<Room> rooms; // КОМПОЗИЦИЯ
+    
+    public House(String address) {
+        this.address = address;
+        this.rooms = new ArrayList<>();
+        // Создаем комнаты при создании дома
+        rooms.add(new Room("Гостиная", 25.0));
+        rooms.add(new Room("Спальня", 18.0));
+        rooms.add(new Room("Кухня", 12.0));
+    }
+    
+    public void showHouse() {
+        System.out.println("Дом по адресу: " + address);
+        System.out.println("Комнаты:");
+        for (Room room : rooms) {
+            room.describe();
+        }
+    }
+    
+    // Комнаты уничтожаются вместе с домом
+}
+
+// Автомобиль (содержит колеса как агрегацию)
+class Vehicle {
+    private String model;
+    private List<Wheel> wheels; // АГРЕГАЦИЯ
+    
+    public Vehicle(String model) {
+        this.model = model;
+        this.wheels = new ArrayList<>();
+        // Колеса создаются отдельно и добавляются
+    }
+    
+    public void addWheel(Wheel wheel) {
+        if (wheels.size() < 4) {
+            wheels.add(wheel);
+        }
+    }
+    
+    public void removeWheel(Wheel wheel) {
+        wheels.remove(wheel);
+        // Колесо продолжает существовать отдельно
+    }
+    
+    public void drive() {
+        System.out.println(model + " едет на колесах:");
+        for (Wheel wheel : wheels) {
+            wheel.rotate();
+        }
+    }
+}
+
+// ============ ГЛАВНЫЙ КЛАСС ============
+public class CompositionVsAggregation {
+    public static void main(String[] args) {
+        System.out.println("=== АГРЕГАЦИЯ ===");
+        
+        // Двигатель создается отдельно
+        Engine engine = new Engine("V8", 400);
+        engine.start();
+        
+        // Автомобиль использует существующий двигатель
+        Car car = new Car("Toyota", "Camry", engine);
+        car.startCar();
+        
+        // Можем заменить двигатель
+        Engine newEngine = new Engine("V6 Turbo", 350);
+        car.changeEngine(newEngine);
+        car.startCar();
+        
+        // Двигатель продолжает существовать после удаления автомобиля
+        System.out.println("Двигатель все еще существует отдельно");
+        
+        System.out.println("\n=== КОМПОЗИЦИЯ ===");
+        
+        // Человек создается вместе с сердцем
+        Human human = new Human("Иван");
+        human.live();
+        
+        // Не можем получить доступ к сердцу напрямую
+        // Heart h = human.heart; // Ошибка - приватное поле
+        
+        // При уничтожении человека сердце тоже уничтожается
+        System.out.println("Сердце существует только пока жив человек");
+        
+        System.out.println("\n=== СЛОЖНЫЙ ПРИМЕР: Дом (композиция) ===");
+        House house = new House("ул. Ленина, 10");
+        house.showHouse();
+        System.out.println("Комнаты не могут существовать без дома");
+        
+        System.out.println("\n=== СЛОЖНЫЙ ПРИМЕР: Автомобиль (агрегация) ===");
+        Vehicle vehicle = new Vehicle("Ford Focus");
+        
+        // Создаем колеса отдельно
+        Wheel wheel1 = new Wheel(17);
+        Wheel wheel2 = new Wheel(17);
+        Wheel wheel3 = new Wheel(17);
+        Wheel wheel4 = new Wheel(17);
+        
+        // Добавляем колеса к автомобилю
+        vehicle.addWheel(wheel1);
+        vehicle.addWheel(wheel2);
+        vehicle.addWheel(wheel3);
+        vehicle.addWheel(wheel4);
+        
+        vehicle.drive();
+        
+        // Можем снять колесо и использовать его отдельно
+        vehicle.removeWheel(wheel1);
+        System.out.println("\nСняли одно колесо:");
+        wheel1.rotate(); // Колесо продолжает существовать
+        
+        System.out.println("\n=== КЛЮЧЕВЫЕ ОТЛИЧИЯ ===");
+        System.out.println("1. Владелец жизни:");
+        System.out.println("   - Агрегация: часть может жить отдельно");
+        System.out.println("   - Композиция: часть не может жить без целого");
+        
+        System.out.println("\n2. Создание объектов:");
+        System.out.println("   - Агрегация: часть создается отдельно и передается");
+        System.out.println("   - Композиция: часть создается внутри целого");
+        
+        System.out.println("\n3. Уничтожение объектов:");
+        System.out.println("   - Агрегация: при уничтожении целого часть остается");
+        System.out.println("   - Композиция: при уничтожении целого часть уничтожается");
+        
+        System.out.println("\n4. Доступность:");
+        System.out.println("   - Агрегация: часть может быть публичной или доступной");
+        System.out.println("   - Композиция: часть обычно скрыта (инкапсулирована)");
+        
+        System.out.println("\n=== ПРАКТИЧЕСКОЕ ПРИМЕНЕНИЕ ===");
+        
+        // Пример с заказом и товарами (агрегация)
+        Order order = new Order();
+        Product p1 = new Product("Ноутбук", 50000);
+        Product p2 = new Product("Мышь", 2000);
+        
+        order.addProduct(p1);
+        order.addProduct(p2);
+        order.showOrder();
+        
+        // Товары существуют независимо от заказа
+        System.out.println("Товары остаются в каталоге после удаления заказа");
+    }
+}
+
+// Дополнительный пример
+class Product {
+    private String name;
+    private double price;
+    
+    public Product(String name, double price) {
+        this.name = name;
+        this.price = price;
+    }
+    
+    public String getName() { return name; }
+    public double getPrice() { return price; }
+}
+
+class Order {
+    private List<Product> products; // АГРЕГАЦИЯ
+    
+    public Order() {
+        products = new ArrayList<>();
+    }
+    
+    public void addProduct(Product product) {
+        products.add(product);
+    }
+    
+    public void showOrder() {
+        double total = 0;
+        System.out.println("Заказ содержит:");
+        for (Product p : products) {
+            System.out.println("  - " + p.getName() + ": " + p.getPrice() + " руб.");
+            total += p.getPrice();
+        }
+        System.out.println("Итого: " + total + " руб.");
+    }
+}
