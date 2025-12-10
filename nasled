@@ -1,0 +1,86 @@
+// Базовый (родительский) класс
+class Animal {
+    private String name;
+    
+    public Animal(String name) {
+        this.name = name;
+    }
+    
+    public void eat() {
+        System.out.println(name + " ест.");
+    }
+    
+    public void sleep() {
+        System.out.println(name + " спит.");
+    }
+    
+    public String getName() {
+        return name;
+    }
+}
+
+// Производный (дочерний) класс - наследует от Animal
+class Dog extends Animal {
+    public Dog(String name) {
+        super(name); // Вызов конструктора родительского класса
+    }
+    
+    // Добавляем новое поведение
+    public void bark() {
+        System.out.println(getName() + " гавкает: Гав-гав!");
+    }
+    
+    // Переопределяем метод родителя
+    @Override
+    public void eat() {
+        System.out.println(getName() + " с удовольствием ест косточку.");
+    }
+}
+
+// Еще один производный класс
+class Cat extends Animal {
+    public Cat(String name) {
+        super(name);
+    }
+    
+    public void meow() {
+        System.out.println(getName() + " мяукает: Мяу!");
+    }
+    
+    @Override
+    public void sleep() {
+        System.out.println(getName() + " спит, свернувшись клубочком.");
+    }
+}
+
+// Демонстрация работы
+public class InheritanceExample {
+    public static void main(String[] args) {
+        // Создаем объекты
+        Dog dog = new Dog("Барсик");
+        Cat cat = new Cat("Мурка");
+        
+        // Используем унаследованные методы
+        System.out.println("=== Унаследованные методы ===");
+        dog.eat();    // Переопределенный метод
+        dog.sleep();  // Метод из родительского класса
+        cat.eat();    // Метод из родительского класса
+        cat.sleep();  // Переопределенный метод
+        
+        System.out.println("\n=== Уникальные методы ===");
+        // Используем собственные методы
+        dog.bark();
+        cat.meow();
+        
+        System.out.println("\n=== Полиморфизм ===");
+        // Работа через родительский тип
+        Animal[] animals = {dog, cat};
+        
+        for (Animal animal : animals) {
+            animal.eat();  // Вызовется переопределенная версия для каждого объекта
+            if (animal instanceof Dog) {
+                ((Dog) animal).bark(); // Приведение типа для доступа к специфичным методам
+            }
+        }
+    }
+}
