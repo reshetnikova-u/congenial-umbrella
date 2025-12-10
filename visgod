@@ -1,0 +1,373 @@
+import java.util.InputMismatchException;
+import java.util.Scanner;
+
+public class LeapYearChecker {
+    
+    /**
+     * Проверяет, является ли год високосным
+     * @param year год для проверки
+     * @return true, если год високосный, false - в противном случае
+     */
+    public static boolean isLeapYear(int year) {
+        // Год является високосным, если:
+        // 1. Он делится на 400, ИЛИ
+        // 2. Он делится на 4, но НЕ делится на 100
+        
+        if (year % 400 == 0) {
+            return true;
+        } else if (year % 100 == 0) {
+            return false;
+        } else {
+            return year % 4 == 0;
+        }
+    }
+    
+    /**
+     * Проверяет корректность введенного года
+     * @param year год для проверки
+     * @throws IllegalArgumentException если год меньше 1
+     */
+    public static void validateYear(int year) throws IllegalArgumentException {
+        if (year < 1) {
+            throw new IllegalArgumentException("Год должен быть положительным числом");
+        }
+        // Можно также добавить верхнюю границу, если нужно
+        // if (year > 9999) {
+        //     throw new IllegalArgumentException("Год не может быть больше 9999");
+        // }
+    }
+    
+    /**
+     * Получает корректный год от пользователя
+     */
+    public static int getValidYear(Scanner scanner) {
+        while (true) {
+            try {
+                System.out.print("Введите год: ");
+                int year = scanner.nextInt();
+                validateYear(year);
+                return year;
+            } catch (InputMismatchException e) {
+                System.out.println("Ошибка: Введите целое число!");
+                scanner.next(); // Очищаем некорректный ввод
+            } catch (IllegalArgumentException e) {
+                System.out.println("Ошибка: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Проверяет год с использованием собственного исключения
+     */
+    public static void checkYearWithCustomException(int year) throws InvalidYearException {
+        if (year < 1) {
+            throw new InvalidYearException("Год должен быть положительным числом", year);
+        }
+        if (year > 9999) {
+            throw new InvalidYearException("Год не может быть больше 9999", year);
+        }
+    }
+    
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        
+        System.out.println("══════════════════════════════════════════════");
+        System.out.println("      ПРОВЕРКА ВИСОКОСНОГО ГОДА                ");
+        System.out.println("══════════════════════════════════════════════");
+        System.out.println("Программа определяет, является ли год високосным.");
+        System.out.println("Для выхода введите '0'.");
+        System.out.println("══════════════════════════════════════════════");
+        
+        while (true) {
+            try {
+                System.out.print("\nВведите год (или 0 для выхода): ");
+                
+                // Проверяем, есть ли следующее число
+                if (!scanner.hasNextInt()) {
+                    System.out.println("Ошибка: Введите целое число!");
+                    scanner.next(); // Очищаем некорректный ввод
+                    continue;
+                }
+                
+                int year = scanner.nextInt();
+                
+                // Выход из программы
+                if (year == 0) {
+                    System.out.println("Программа завершена.");
+                    break;
+                }
+                
+                // Вариант 1: Простая проверка с обработкой исключений
+                System.out.println("\n══════════════════════════════════════════════");
+                System.out.println("            РЕЗУЛЬТАТ ПРОВЕРКИ                  ");
+                System.out.println("══════════════════════════════════════════════");
+                
+                try {
+                    validateYear(year);
+                    boolean isLeap = isLeapYear(year);
+                    
+                    if (isLeap) {
+                        System.out.println("Год " + year + " - ВИСОКОСНЫЙ");
+                    } else {
+                        System.out.println("Год " + year + " - НЕ високосный");
+                    }
+                    
+                    // Дополнительная информация
+                    System.out.println("────────────────────────────────────────────");
+                    System.out.println("Объяснение:");
+                    if (year % 400 == 0) {
+                        System.out.println(year + " делится на 400 → високосный");
+                    } else if (year % 100 == 0) {
+                        System.out.println(year + " делится на 100, но не на 400 → не високосный");
+                    } else if (year % 4 == 0) {
+                        System.out.println(year + " делится на 4 и не делится на 100 → високосный");
+                    } else {
+                        System.out.println(year + " не делится на 4 → не високосный");
+                    }
+                    
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Ошибка валидации: " + e.getMessage());
+                }
+                
+                // Вариант 2: Использование собственного исключения
+                System.out.println("\n══════════════════════════════════════════════");
+                System.out.println("     ПРОВЕРКА С СОБСТВЕННЫМ ИСКЛЮЧЕНИЕМ        ");
+                System.out.println("══════════════════════════════════════════════");
+                
+                try {
+                    checkYearWithCustomException(year);
+                    boolean isLeap = isLeapYear(year);
+                    System.out.println("Результат: " + (isLeap ? "високосный" : "не високосный"));
+                } catch (InvalidYearException e) {
+                    System.out.println("Ошибка: " + e.getMessage());
+                    System.out.println("Некорректный год: " + e.getInvalidYear());
+                }
+                
+                // Демонстрация других исключительных ситуаций
+                System.out.println("\n══════════════════════════════════════════════");
+                System.out.println("      ДОПОЛНИТЕЛЬНЫЕ ПРОВЕРКИ                   ");
+                System.out.println("══════════════════════════════════════════════");
+                
+                demonstrateMoreExceptions(year);
+                
+            } catch (Exception e) {
+                System.out.println("Неожиданная ошибка: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        scanner.close();
+    }
+    
+    /**
+     * Демонстрирует различные исключительные ситуации
+     */
+    private static void demonstrateMoreExceptions(int year) {
+        try {
+            // Проверка на слишком большой год (имитация)
+            if (year > 3000) {
+                throw new ArithmeticException("Слишком большой год для расчетов");
+            }
+            
+            // Проверка на "особые" года
+            if (year == 1582) {
+                System.out.println("Внимание: 1582 год - год введения Григорианского календаря.");
+                System.out.println("В этом году было пропущено 10 дней (4-14 октября не существовало).");
+            }
+            
+            // Расчет следующего високосного года
+            int nextLeapYear = findNextLeapYear(year);
+            System.out.println("Следующий високосный год после " + year + ": " + nextLeapYear);
+            
+            // Расчет количества високосных лет в столетии
+            int centuryStart = (year / 100) * 100 + 1;
+            int centuryEnd = centuryStart + 99;
+            int leapYearsInCentury = countLeapYearsInRange(centuryStart, centuryEnd);
+            System.out.println("В столетии с " + centuryStart + " по " + centuryEnd + 
+                             ": " + leapYearsInCentury + " високосных лет");
+            
+        } catch (ArithmeticException e) {
+            System.out.println("Математическая ошибка: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("Общая ошибка: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Находит следующий високосный год после заданного
+     */
+    private static int findNextLeapYear(int currentYear) {
+        int year = currentYear + 1;
+        while (!isLeapYear(year)) {
+            year++;
+        }
+        return year;
+    }
+    
+    /**
+     * Считает количество високосных лет в диапазоне
+     */
+    private static int countLeapYearsInRange(int startYear, int endYear) {
+        int count = 0;
+        for (int year = startYear; year <= endYear; year++) {
+            if (isLeapYear(year)) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    /**
+     * Упрощенная версия программы (для быстрой проверки)
+     */
+    public static void simpleCheck() {
+        Scanner scanner = new Scanner(System.in);
+        
+        System.out.println("Быстрая проверка високосного года");
+        System.out.println("=================================");
+        
+        try {
+            System.out.print("Введите год: ");
+            int year = scanner.nextInt();
+            
+            // Проверка на корректность года
+            if (year <= 0) {
+                throw new IllegalArgumentException("Год должен быть положительным числом!");
+            }
+            
+            // Проверка на високосность
+            if (isLeapYear(year)) {
+                System.out.println(year + " - високосный год");
+            } else {
+                System.out.println(year + " - обычный год");
+            }
+            
+        } catch (InputMismatchException e) {
+            System.out.println("Ошибка: Необходимо ввести целое число!");
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+        } finally {
+            System.out.println("Проверка завершена.");
+            scanner.close();
+        }
+    }
+}
+
+/**
+ * Пользовательское исключение для некорректного года
+ */
+class InvalidYearException extends Exception {
+    private final int invalidYear;
+    
+    public InvalidYearException(String message, int invalidYear) {
+        super(message);
+        this.invalidYear = invalidYear;
+    }
+    
+    public int getInvalidYear() {
+        return invalidYear;
+    }
+    
+    @Override
+    public String toString() {
+        return "InvalidYearException: " + getMessage() + " [year=" + invalidYear + "]";
+    }
+}
+
+/**
+ * Тестовый класс для проверки работы программы
+ */
+class LeapYearTest {
+    public static void runTests() {
+        System.out.println("══════════════════════════════════════════════");
+        System.out.println("           ТЕСТЫ ВИСОКОСНЫХ ГОДОВ             ");
+        System.out.println("══════════════════════════════════════════════");
+        
+        // Тестовые данные: [год, ожидаемый результат]
+        int[][] testCases = {
+            {2000, 1},  // делится на 400 - високосный
+            {1900, 0},  // делится на 100, но не на 400 - не високосный
+            {2024, 1},  // делится на 4, но не на 100 - високосный
+            {2023, 0},  // не делится на 4 - не високосный
+            {2400, 1},  // делится на 400 - високосный
+            {2100, 0},  // делится на 100, но не на 400 - не високосный
+            {1600, 1},  // делится на 400 - високосный
+            {1700, 0},  // делится на 100, но не на 400 - не високосный
+            {1800, 0},  // делится на 100, но не на 400 - не високосный
+            {2016, 1},  // делится на 4, но не на 100 - високосный
+        };
+        
+        int passed = 0;
+        int failed = 0;
+        
+        for (int[] testCase : testCases) {
+            int year = testCase[0];
+            boolean expected = testCase[1] == 1;
+            boolean actual = LeapYearChecker.isLeapYear(year);
+            
+            if (expected == actual) {
+                System.out.printf("✓ %d: %s (OK)%n", year, 
+                                 expected ? "високосный" : "не високосный");
+                passed++;
+            } else {
+                System.out.printf("✗ %d: ожидалось %s, получено %s (FAIL)%n", 
+                                 year, 
+                                 expected ? "високосный" : "не високосный",
+                                 actual ? "високосный" : "не високосный");
+                failed++;
+            }
+        }
+        
+        System.out.println("\n══════════════════════════════════════════════");
+        System.out.printf("Результаты: %d тестов пройдено, %d тестов провалено%n", passed, failed);
+        System.out.println("══════════════════════════════════════════════");
+    }
+    
+    /**
+     * Тестирование исключительных ситуаций
+     */
+    public static void testExceptions() {
+        System.out.println("\n══════════════════════════════════════════════");
+        System.out.println("    ТЕСТИРОВАНИЕ ИСКЛЮЧИТЕЛЬНЫХ СИТУАЦИЙ      ");
+        System.out.println("══════════════════════════════════════════════");
+        
+        try {
+            // Тест 1: Нулевой год
+            LeapYearChecker.validateYear(0);
+            System.out.println("✗ Тест 1 (год=0) не выбросил исключение");
+        } catch (IllegalArgumentException e) {
+            System.out.println("✓ Тест 1 (год=0): " + e.getMessage());
+        }
+        
+        try {
+            // Тест 2: Отрицательный год
+            LeapYearChecker.validateYear(-100);
+            System.out.println("✗ Тест 2 (год=-100) не выбросил исключение");
+        } catch (IllegalArgumentException e) {
+            System.out.println("✓ Тест 2 (год=-100): " + e.getMessage());
+        }
+        
+        try {
+            // Тест 3: Корректный год (не должно быть исключения)
+            LeapYearChecker.validateYear(2024);
+            System.out.println("✓ Тест 3 (год=2024): корректный год");
+        } catch (IllegalArgumentException e) {
+            System.out.println("✗ Тест 3 (год=2024) выбросил исключение: " + e.getMessage());
+        }
+    }
+}
+
+// Для запуска тестов можно использовать этот метод
+class TestRunner {
+    public static void main(String[] args) {
+        // Запуск тестов
+        LeapYearTest.runTests();
+        LeapYearTest.testExceptions();
+        
+        // Запуск упрощенной версии
+        System.out.println("\n══════════════════════════════════════════════");
+        System.out.println("   ЗАПУСК УПРОЩЕННОЙ ВЕРСИИ ПРОВЕРКИ          ");
+        System.out.println("══════════════════════════════════════════════");
+        LeapYearChecker.simpleCheck();
+    }
+}
