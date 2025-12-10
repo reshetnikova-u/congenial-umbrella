@@ -1,0 +1,569 @@
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class FileDuplicateRemover {
+    
+    /**
+     * Удаляет дублирующиеся строки из файла и сохраняет результат
+     * @param inputFilePath путь к исходному файлу
+     * @param outputFilePath путь к выходному файлу
+     * @return количество удаленных дублирующихся строк
+     * @throws IOException если произошла ошибка ввода/вывода
+     */
+    public static int removeDuplicates(String inputFilePath, String outputFilePath) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(inputFilePath), StandardCharsets.UTF_8);
+        
+        // Используем LinkedHashSet для сохранения порядка и удаления дубликатов
+        Set<String> uniqueLines = new LinkedHashSet<>();
+        int originalCount = lines.size();
+        
+        for (String line : lines) {
+            uniqueLines.add(line);
+        }
+        
+        int removedCount = originalCount - uniqueLines.size();
+        
+        // Записываем уникальные строки в выходной файл
+        Files.write(Paths.get(outputFilePath), uniqueLines, StandardCharsets.UTF_8);
+        
+        // Добавляем информацию о количестве удаленных строк в конец файла
+        try (BufferedWriter writer = new BufferedWriter(
+                new FileWriter(outputFilePath, StandardCharsets.UTF_8, true))) {
+            writer.newLine();
+            writer.write("========================================");
+            writer.newLine();
+            writer.write("СТАТИСТИКА:");
+            writer.newLine();
+            writer.write(String.format("Исходное количество строк: %d", originalCount));
+            writer.newLine();
+            writer.write(String.format("Уникальных строк: %d", uniqueLines.size()));
+            writer.newLine();
+            writer.write(String.format("Удалено дублирующихся строк: %d", removedCount));
+            writer.newLine();
+            writer.write("========================================");
+        }
+        
+        return removedCount;
+    }
+    
+    /**
+     * Удаляет дублирующиеся строки с сохранением сжатой версии
+     * @param inputFilePath путь к исходному файлу
+     * @param compressedFilePath путь к сжатому файлу
+     * @param metadataFilePath путь к файлу метаданных
+     * @return количество удаленных дублирующихся строк
+     * @throws IOException если произошла ошибка ввода/вывода
+     */
+    public static int compressFile(String inputFilePath, String compressedFilePath, 
+                                  String metadataFilePath) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(inputFilePath), StandardCharsets.UTF_8);
+        
+        // Создаем мапу для хранения индексов строк и их повторений
+        Map<String, List<Integer>> lineIndices = new LinkedHashMap<>();
+        int originalCount = lines.size();
+        
+        // Собираем информацию о всех строках и их позициях
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            lineIndices.computeIfAbsent(line, k -> new ArrayList<>()).add(i);
+        }
+        
+        // Записываем сжатый файл (только уникальные строки)
+        List<String> compressedLines = new ArrayList<>(lineIndices.keySet());
+        Files.write(Paths.get(compressedFilePath), compressedLines, StandardCharsets.UTF_8);
+        
+        // Сохраняем метаданные для восстановления
+        saveMetadata(lineIndices, originalCount, metadataFilePath);
+        
+        int removedCount = originalCount - compressedLines.size();
+        
+        System.out.println("Файл сжат успешно.");
+        System.out.printf("Удалено %d дублирующихся строк.%n", removedCount);
+        
+        return removedCount;
+    }
+    
+    /**
+     * Сохраняет метаданные для восстановления файла
+     */
+    private static void saveMetadata(Map<String, List<Integer>> lineIndices, 
+                                    int totalLines, String metadataFilePath) throws IOException {
+        List<String> metadata = new ArrayList<>();
+        
+        // Заголовок
+        metadata.add("МЕТАДАННЫЕ ДЛЯ ВОССТАНОВЛЕНИЯ ФАЙЛА");
+        metadata.add("====================================");
+        metadata.add(String.format("Общее количество строк в исходном файле: %d", totalLines));
+        metadata.add(String.format("Количество уникальных строк: %d", lineIndices.size()));
+        metadata.add("");
+        metadata.add("СТРУКТУРА ФАЙЛА:");
+        metadata.add("Индекс в сжатом файле | Строка | Позиции в исходном файле");
+        metadata.add("---------------------------------------------------------");
+        
+        // Данные о каждой строке
+        List<String> uniqueLines = new ArrayList<>(lineIndices.keySet());
+        for (int i = 0; i < uniqueLines.size(); i++) {
+            String line = uniqueLines.get(i);
+            List<Integer> positions = lineIndices.get(line);
+            
+            String positionsStr = positions.stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(", "));
+            
+            metadata.add(String.format("%3d | %s | %s", i, 
+                    truncate(line, 50), positionsStr));
+        }
+        
+        Files.write(Paths.get(metadataFilePath), metadata, StandardCharsets.UTF_8);
+    }
+    
+    /**
+     * Восстанавливает исходный файл из сжатой версии
+     * @param compressedFilePath путь к сжатому файлу
+     * @param metadataFilePath путь к файлу метаданных
+     * @param restoredFilePath путь к восстановленному файлу
+     * @throws IOException если произошла ошибка ввода/вывода
+     */
+    public static void restoreFile(String compressedFilePath, String metadataFilePath,
+                                  String restoredFilePath) throws IOException {
+        // Читаем сжатый файл
+        List<String> compressedLines = Files.readAllLines(
+                Paths.get(compressedFilePath), StandardCharsets.UTF_8);
+        
+        // Читаем метаданные
+        List<String> metadataLines = Files.readAllLines(
+                Paths.get(metadataFilePath), StandardCharsets.UTF_8);
+        
+        // Парсим метаданные
+        Map<Integer, List<Integer>> restorationMap = parseMetadata(metadataLines);
+        
+        // Определяем общее количество строк в исходном файле
+        int totalLines = getTotalLinesFromMetadata(metadataLines);
+        
+        // Восстанавливаем файл
+        List<String> restoredLines = new ArrayList<>(Collections.nCopies(totalLines, ""));
+        
+        for (Map.Entry<Integer, List<Integer>> entry : restorationMap.entrySet()) {
+            int compressedIndex = entry.getKey();
+            List<Integer> positions = entry.getValue();
+            String line = compressedLines.get(compressedIndex);
+            
+            for (int position : positions) {
+                restoredLines.set(position, line);
+            }
+        }
+        
+        // Записываем восстановленный файл
+        Files.write(Paths.get(restoredFilePath), restoredLines, StandardCharsets.UTF_8);
+        
+        System.out.println("Файл восстановлен успешно.");
+        System.out.printf("Восстановлено %d строк.%n", totalLines);
+    }
+    
+    /**
+     * Парсит метаданные для создания карты восстановления
+     */
+    private static Map<Integer, List<Integer>> parseMetadata(List<String> metadataLines) {
+        Map<Integer, List<Integer>> restorationMap = new HashMap<>();
+        
+        for (String line : metadataLines) {
+            if (line.contains("|")) {
+                String[] parts = line.split("\\|");
+                if (parts.length >= 3) {
+                    try {
+                        int compressedIndex = Integer.parseInt(parts[0].trim());
+                        String positionsStr = parts[2].trim();
+                        
+                        List<Integer> positions = Arrays.stream(positionsStr.split(","))
+                                .map(String::trim)
+                                .map(Integer::parseInt)
+                                .collect(Collectors.toList());
+                        
+                        restorationMap.put(compressedIndex, positions);
+                    } catch (NumberFormatException e) {
+                        // Пропускаем строки, которые не являются данными
+                    }
+                }
+            }
+        }
+        
+        return restorationMap;
+    }
+    
+    /**
+     * Получает общее количество строк из метаданных
+     */
+    private static int getTotalLinesFromMetadata(List<String> metadataLines) {
+        for (String line : metadataLines) {
+            if (line.contains("Общее количество строк")) {
+                String[] parts = line.split(":");
+                if (parts.length == 2) {
+                    return Integer.parseInt(parts[1].trim());
+                }
+            }
+        }
+        return 0;
+    }
+    
+    /**
+     * Обрезает строку до указанной длины
+     */
+    private static String truncate(String str, int maxLength) {
+        if (str.length() <= maxLength) {
+            return str;
+        }
+        return str.substring(0, maxLength - 3) + "...";
+    }
+    
+    /**
+     * Проверяет, совпадают ли два файла
+     */
+    public static boolean compareFiles(String file1, String file2) throws IOException {
+        List<String> lines1 = Files.readAllLines(Paths.get(file1), StandardCharsets.UTF_8);
+        List<String> lines2 = Files.readAllLines(Paths.get(file2), StandardCharsets.UTF_8);
+        
+        if (lines1.size() != lines2.size()) {
+            System.out.printf("Файлы разного размера: %d vs %d строк%n", 
+                    lines1.size(), lines2.size());
+            return false;
+        }
+        
+        for (int i = 0; i < lines1.size(); i++) {
+            if (!lines1.get(i).equals(lines2.get(i))) {
+                System.out.printf("Расхождение в строке %d:%n", i + 1);
+                System.out.printf("  Файл 1: %s%n", lines1.get(i));
+                System.out.printf("  Файл 2: %s%n", lines2.get(i));
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Создает тестовый файл с дублирующимися строками
+     */
+    public static void createTestFile(String filePath, int linesCount) throws IOException {
+        List<String> lines = new ArrayList<>();
+        
+        // Шаблоны строк
+        String[] templates = {
+            "Это тестовая строка номер %d",
+            "Повторяющаяся строка %d",
+            "Еще одна строка %d",
+            "Случайный текст %d",
+            "Дублирующаяся информация %d"
+        };
+        
+        Random random = new Random(42); // Фиксированный seed для воспроизводимости
+        
+        for (int i = 0; i < linesCount; i++) {
+            int templateIndex = random.nextInt(templates.length);
+            int repeatChance = random.nextInt(100);
+            
+            // 30% шанс повторить предыдущую строку
+            if (i > 0 && repeatChance < 30 && lines.size() > 1) {
+                int repeatIndex = random.nextInt(Math.min(i, 5));
+                lines.add(lines.get(repeatIndex));
+            } else {
+                lines.add(String.format(templates[templateIndex], i));
+            }
+        }
+        
+        Files.write(Paths.get(filePath), lines, StandardCharsets.UTF_8);
+        System.out.printf("Создан тестовый файл с %d строками: %s%n", linesCount, filePath);
+    }
+    
+    /**
+     * Главный метод программы
+     */
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        
+        System.out.println("══════════════════════════════════════════════════");
+        System.out.println("   ПРОГРАММА УДАЛЕНИЯ ДУБЛИРУЮЩИХСЯ СТРОК         ");
+        System.out.println("══════════════════════════════════════════════════");
+        System.out.println("1. Простой режим (удаление дубликатов)");
+        System.out.println("2. Сжатие с возможностью восстановления");
+        System.out.println("3. Восстановление файла");
+        System.out.println("4. Создать тестовый файл");
+        System.out.println("5. Сравнить два файла");
+        System.out.println("0. Выход");
+        System.out.println("══════════════════════════════════════════════════");
+        
+        while (true) {
+            System.out.print("\nВыберите действие (0-5): ");
+            
+            if (!scanner.hasNextInt()) {
+                System.out.println("Ошибка: введите число от 0 до 5.");
+                scanner.next();
+                continue;
+            }
+            
+            int choice = scanner.nextInt();
+            scanner.nextLine(); // Очищаем буфер
+            
+            if (choice == 0) {
+                System.out.println("Программа завершена.");
+                break;
+            }
+            
+            try {
+                switch (choice) {
+                    case 1 -> simpleMode(scanner);
+                    case 2 -> compressionMode(scanner);
+                    case 3 -> restorationMode(scanner);
+                    case 4 -> testFileMode(scanner);
+                    case 5 -> compareMode(scanner);
+                    default -> System.out.println("Неверный выбор.");
+                }
+            } catch (IOException e) {
+                System.out.println("Ошибка ввода/вывода: " + e.getMessage());
+                e.printStackTrace();
+            } catch (Exception e) {
+                System.out.println("Ошибка: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
+        scanner.close();
+    }
+    
+    /**
+     * Простой режим: удаление дубликатов
+     */
+    private static void simpleMode(Scanner scanner) throws IOException {
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("        ПРОСТОЕ УДАЛЕНИЕ ДУБЛИКАТОВ                ");
+        System.out.println("══════════════════════════════════════════════════");
+        
+        System.out.print("Введите путь к исходному файлу: ");
+        String inputFile = scanner.nextLine().trim();
+        
+        System.out.print("Введите путь для сохранения результата: ");
+        String outputFile = scanner.nextLine().trim();
+        
+        if (inputFile.isEmpty() || outputFile.isEmpty()) {
+            System.out.println("Ошибка: пути не могут быть пустыми.");
+            return;
+        }
+        
+        long startTime = System.currentTimeMillis();
+        int removedCount = removeDuplicates(inputFile, outputFile);
+        long endTime = System.currentTimeMillis();
+        
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("               РЕЗУЛЬТАТЫ ОБРАБОТКИ                ");
+        System.out.println("══════════════════════════════════════════════════");
+        System.out.println("Удалено дублирующихся строк: " + removedCount);
+        System.out.println("Время выполнения: " + (endTime - startTime) + " мс");
+        System.out.println("Результат сохранен в: " + outputFile);
+        
+        // Показываем статистику файла
+        File file = new File(outputFile);
+        if (file.exists()) {
+            List<String> lines = Files.readAllLines(Paths.get(outputFile), StandardCharsets.UTF_8);
+            System.out.println("Количество строк в результате: " + lines.size());
+        }
+    }
+    
+    /**
+     * Режим сжатия с возможностью восстановления
+     */
+    private static void compressionMode(Scanner scanner) throws IOException {
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("          СЖАТИЕ С ВОЗМОЖНОСТЬЮ ВОССТАНОВЛЕНИЯ     ");
+        System.out.println("══════════════════════════════════════════════════");
+        
+        System.out.print("Введите путь к исходному файлу: ");
+        String inputFile = scanner.nextLine().trim();
+        
+        System.out.print("Введите путь для сжатого файла: ");
+        String compressedFile = scanner.nextLine().trim();
+        
+        System.out.print("Введите путь для файла метаданных: ");
+        String metadataFile = scanner.nextLine().trim();
+        
+        if (inputFile.isEmpty() || compressedFile.isEmpty() || metadataFile.isEmpty()) {
+            System.out.println("Ошибка: все пути должны быть указаны.");
+            return;
+        }
+        
+        long startTime = System.currentTimeMillis();
+        int removedCount = compressFile(inputFile, compressedFile, metadataFile);
+        long endTime = System.currentTimeMillis();
+        
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("               РЕЗУЛЬТАТЫ СЖАТИЯ                   ");
+        System.out.println("══════════════════════════════════════════════════");
+        System.out.println("Удалено дублирующихся строк: " + removedCount);
+        System.out.println("Время выполнения: " + (endTime - startTime) + " мс");
+        System.out.println("Сжатый файл: " + compressedFile);
+        System.out.println("Метаданные: " + metadataFile);
+        
+        // Показываем информацию о файлах
+        File compFile = new File(compressedFile);
+        File metaFile = new File(metadataFile);
+        File inFile = new File(inputFile);
+        
+        if (compFile.exists() && metaFile.exists()) {
+            System.out.println("\nРазмеры файлов:");
+            System.out.printf("  Исходный файл: %,d байт%n", inFile.length());
+            System.out.printf("  Сжатый файл: %,d байт%n", compFile.length());
+            System.out.printf("  Метаданные: %,d байт%n", metaFile.length());
+            
+            long totalCompressed = compFile.length() + metaFile.length();
+            double compressionRatio = (1 - (double) totalCompressed / inFile.length()) * 100;
+            System.out.printf("  Общий коэффициент сжатия: %.2f%%%n", compressionRatio);
+        }
+    }
+    
+    /**
+     * Режим восстановления файла
+     */
+    private static void restorationMode(Scanner scanner) throws IOException {
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("            ВОССТАНОВЛЕНИЕ ФАЙЛА                   ");
+        System.out.println("══════════════════════════════════════════════════");
+        
+        System.out.print("Введите путь к сжатому файлу: ");
+        String compressedFile = scanner.nextLine().trim();
+        
+        System.out.print("Введите путь к файлу метаданных: ");
+        String metadataFile = scanner.nextLine().trim();
+        
+        System.out.print("Введите путь для восстановленного файла: ");
+        String restoredFile = scanner.nextLine().trim();
+        
+        if (compressedFile.isEmpty() || metadataFile.isEmpty() || restoredFile.isEmpty()) {
+            System.out.println("Ошибка: все пути должны быть указаны.");
+            return;
+        }
+        
+        long startTime = System.currentTimeMillis();
+        restoreFile(compressedFile, metadataFile, restoredFile);
+        long endTime = System.currentTimeMillis();
+        
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("         РЕЗУЛЬТАТЫ ВОССТАНОВЛЕНИЯ                 ");
+        System.out.println("══════════════════════════════════════════════════");
+        System.out.println("Время выполнения: " + (endTime - startTime) + " мс");
+        System.out.println("Восстановленный файл: " + restoredFile);
+    }
+    
+    /**
+     * Режим создания тестового файла
+     */
+    private static void testFileMode(Scanner scanner) throws IOException {
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("          СОЗДАНИЕ ТЕСТОВОГО ФАЙЛА                 ");
+        System.out.println("══════════════════════════════════════════════════");
+        
+        System.out.print("Введите путь для тестового файла: ");
+        String testFile = scanner.nextLine().trim();
+        
+        System.out.print("Введите количество строк (по умолчанию 100): ");
+        String countStr = scanner.nextLine().trim();
+        
+        int linesCount = 100;
+        if (!countStr.isEmpty()) {
+            try {
+                linesCount = Integer.parseInt(countStr);
+                if (linesCount <= 0) {
+                    System.out.println("Количество строк должно быть положительным. Используется 100.");
+                    linesCount = 100;
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("Неверный формат числа. Используется 100.");
+            }
+        }
+        
+        createTestFile(testFile, linesCount);
+        System.out.println("Тестовый файл создан успешно.");
+    }
+    
+    /**
+     * Режим сравнения файлов
+     */
+    private static void compareMode(Scanner scanner) throws IOException {
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("            СРАВНЕНИЕ ДВУХ ФАЙЛОВ                  ");
+        System.out.println("══════════════════════════════════════════════════");
+        
+        System.out.print("Введите путь к первому файлу: ");
+        String file1 = scanner.nextLine().trim();
+        
+        System.out.print("Введите путь ко второму файлу: ");
+        String file2 = scanner.nextLine().trim();
+        
+        if (file1.isEmpty() || file2.isEmpty()) {
+            System.out.println("Ошибка: пути не могут быть пустыми.");
+            return;
+        }
+        
+        boolean areEqual = compareFiles(file1, file2);
+        
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("            РЕЗУЛЬТАТЫ СРАВНЕНИЯ                  ");
+        System.out.println("══════════════════════════════════════════════════");
+        
+        if (areEqual) {
+            System.out.println("✓ Файлы идентичны.");
+        } else {
+            System.out.println("✗ Файлы различаются.");
+        }
+    }
+}
+
+/**
+ * Дополнительный класс для пакетной обработки
+ */
+class BatchProcessor {
+    /**
+     * Пакетная обработка нескольких файлов
+     */
+    public static void processMultipleFiles(String[] inputFiles, String outputDir) throws IOException {
+        System.out.println("Начинаем пакетную обработку " + inputFiles.length + " файлов...");
+        
+        int totalRemoved = 0;
+        int processedFiles = 0;
+        
+        for (String inputFile : inputFiles) {
+            try {
+                File file = new File(inputFile);
+                String fileName = file.getName();
+                String baseName = fileName.lastIndexOf('.') > 0 ? 
+                        fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
+                
+                String outputFile = outputDir + File.separator + baseName + "_clean.txt";
+                String compressedFile = outputDir + File.separator + baseName + "_compressed.txt";
+                String metadataFile = outputDir + File.separator + baseName + "_metadata.txt";
+                
+                // Простая обработка
+                int removed = FileDuplicateRemover.removeDuplicates(inputFile, outputFile);
+                
+                // Сжатие с восстановлением
+                FileDuplicateRemover.compressFile(inputFile, compressedFile, metadataFile);
+                
+                totalRemoved += removed;
+                processedFiles++;
+                
+                System.out.printf("Обработан файл: %s (удалено %d дубликатов)%n", 
+                        fileName, removed);
+                
+            } catch (IOException e) {
+                System.out.println("Ошибка при обработке файла " + inputFile + ": " + e.getMessage());
+            }
+        }
+        
+        System.out.println("\n══════════════════════════════════════════════════");
+        System.out.println("           ИТОГИ ПАКЕТНОЙ ОБРАБОТКИ                ");
+        System.out.println("══════════════════════════════════════════════════");
+        System.out.printf("Обработано файлов: %d из %d%n", processedFiles, inputFiles.length);
+        System.out.printf("Всего удалено дубликатов: %d%n", totalRemoved);
+        System.out.println("Результаты сохранены в: " + outputDir);
+    }
+}
