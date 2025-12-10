@@ -1,0 +1,937 @@
+import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.regex.*;
+
+public class TextEditorWithAutoCorrect extends JFrame {
+    
+    // Компоненты интерфейса
+    private JTextArea textArea;
+    private JScrollPane scrollPane;
+    private JMenuBar menuBar;
+    private JLabel statusBar;
+    private JPanel correctionPanel;
+    
+    // Переменные состояния
+    private File currentFile;
+    private boolean isModified = false;
+    private String originalContent = "";
+    
+    // Автозамена
+    private Map<String, String> autoCorrectMap;
+    private ScheduledExecutorService scheduler;
+    private ScheduledFuture<?> correctionTask;
+    private volatile boolean correctionInProgress = false;
+    private volatile long lastTextChangeTime = 0;
+    private final long CORRECTION_DELAY_MS = 1000; // 1 секунда задержки
+    private final long MIN_CHARS_FOR_CORRECTION = 3;
+    
+    // Статистика
+    private int totalCorrections = 0;
+    private int lastSessionCorrections = 0;
+    
+    // Цвета
+    private Color BACKGROUND_COLOR = new Color(45, 45, 45);
+    private Color TEXT_AREA_COLOR = new Color(60, 63, 65);
+    private Color TEXT_COLOR = new Color(220, 220, 220);
+    private Color HIGHLIGHT_COLOR = new Color(255, 255, 200, 50);
+    private Color CORRECTION_PANEL_COLOR = new Color(70, 70, 70);
+    
+    // Шрифты
+    private Font textFont = new Font("Consolas", Font.PLAIN, 14);
+    private Font correctionFont = new Font("Segoe UI", Font.PLAIN, 11);
+    
+    public TextEditorWithAutoCorrect() {
+        initializeAutoCorrectMap();
+        initializeUI();
+        setupListeners();
+        startCorrectionScheduler();
+        updateTitle();
+        updateStatusBar();
+    }
+    
+    private void initializeAutoCorrectMap() {
+        autoCorrectMap = new HashMap<>();
+        
+        // Частые опечатки в русском языке
+        autoCorrectMap.put("првиет", "привет");
+        autoCorrectMap.put("превет", "привет");
+        autoCorrectMap.put("здраствуйте", "здравствуйте");
+        autoCorrectMap.put("здраствуй", "здравствуй");
+        autoCorrectMap.put("извеняюсь", "извиняюсь");
+        autoCorrectMap.put("извени", "извини");
+        autoCorrectMap.put("спосибо", "спасибо");
+        autoCorrectMap.put("пажалуста", "пожалуйста");
+        autoCorrectMap.put("пажалуйста", "пожалуйста");
+        autoCorrectMap.put("огромное", "огромное");
+        autoCorrectMap.put("пожалкйста", "пожалуйста");
+        
+        // Английские опечатки
+        autoCorrectMap.put("helllo", "hello");
+        autoCorrectMap.put("helo", "hello");
+        autoCorrectMap.put("wrold", "world");
+        autoCorrectMap.put("wrld", "world");
+        autoCorrectMap.put("thsi", "this");
+        autoCorrectMap.put("taht", "that");
+        autoCorrectMap.put("teh", "the");
+        autoCorrectMap.put("adn", "and");
+        autoCorrectMap.put("becuase", "because");
+        autoCorrectMap.put("seperate", "separate");
+        autoCorrectMap.put("definately", "definitely");
+        autoCorrectMap.put("recieve", "receive");
+        autoCorrectMap.put("occured", "occurred");
+        autoCorrectMap.put("occurence", "occurrence");
+        
+        // Транслитерация и общие ошибки
+        autoCorrectMap.put("шоу", "что");
+        autoCorrectMap.put("чё", "что");
+        autoCorrectMap.put("щас", "сейчас");
+        autoCorrectMap.put("ща", "сейчас");
+        autoCorrectMap.put("нипалучилось", "не получилось");
+        autoCorrectMap.put("канешна", "конечно");
+        autoCorrectMap.put("канечна", "конечно");
+        autoCorrectMap.put("абазательно", "обязательно");
+        
+        // Профессиональные термины
+        autoCorrectMap.put("програма", "программа");
+        autoCorrectMap.put("праграмма", "программа");
+        autoCorrectMap.put("компилятор", "компилятор");
+        autoCorrectMap.put("компилятор", "компилятор");
+        autoCorrectMap.put("алгоритм", "алгоритм");
+        autoCorrectMap.put("алгаритм", "алгоритм");
+        autoCorrectMap.put("интерфейс", "интерфейс");
+        autoCorrectMap.put("интерфейс", "интерфейс");
+        
+        // Загрузка дополнительных правил из файла
+        loadAutoCorrectRulesFromFile();
+    }
+    
+    private void loadAutoCorrectRulesFromFile() {
+        File rulesFile = new File("autocorrect_rules.txt");
+        if (rulesFile.exists()) {
+            try (BufferedReader reader = new BufferedReader(
+                    new FileReader(rulesFile, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (!line.isEmpty() && !line.startsWith("#")) {
+                        String[] parts = line.split("=");
+                        if (parts.length == 2) {
+                            String wrong = parts[0].trim().toLowerCase();
+                            String correct = parts[1].trim();
+                            autoCorrectMap.put(wrong, correct);
+                        }
+                    }
+                }
+                System.out.println("Загружено " + autoCorrectMap.size() + " правил автозамены");
+            } catch (IOException e) {
+                System.err.println("Не удалось загрузить правила автозамены: " + e.getMessage());
+            }
+        }
+    }
+    
+    private void initializeUI() {
+        setTitle("Текстовый редактор с автозаменой");
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        setSize(1000, 700);
+        setLocationRelativeTo(null);
+        setLayout(new BorderLayout());
+        getContentPane().setBackground(BACKGROUND_COLOR);
+        
+        // Создание компонентов
+        createTextArea();
+        createCorrectionPanel();
+        createMenuBar();
+        createStatusBar();
+        
+        // Обработчик закрытия окна
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                exitApplication();
+            }
+        });
+        
+        setVisible(true);
+    }
+    
+    private void createTextArea() {
+        textArea = new JTextArea();
+        textArea.setFont(textFont);
+        textArea.setBackground(TEXT_AREA_COLOR);
+        textArea.setForeground(TEXT_COLOR);
+        textArea.setCaretColor(Color.WHITE);
+        textArea.setSelectionColor(new Color(0, 120, 215));
+        textArea.setSelectedTextColor(Color.WHITE);
+        textArea.setTabSize(4);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        
+        // Установка UndoManager
+        textArea.getDocument().addUndoableEditListener(new UndoManager());
+        
+        // Границы
+        textArea.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(80, 80, 80), 1),
+            BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
+        
+        scrollPane = new JScrollPane(textArea);
+        scrollPane.setBorder(null);
+        
+        add(scrollPane, BorderLayout.CENTER);
+    }
+    
+    private void createCorrectionPanel() {
+        correctionPanel = new JPanel(new BorderLayout());
+        correctionPanel.setBackground(CORRECTION_PANEL_COLOR);
+        correctionPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(100, 100, 100)),
+            BorderFactory.createEmptyBorder(5, 10, 5, 10)
+        ));
+        correctionPanel.setPreferredSize(new Dimension(0, 100));
+        
+        // Заголовок
+        JLabel titleLabel = new JLabel("Автозамена");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        titleLabel.setForeground(new Color(200, 200, 255));
+        
+        // Панель статистики
+        JPanel statsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        statsPanel.setBackground(CORRECTION_PANEL_COLOR);
+        
+        JLabel correctionsLabel = new JLabel("Исправлений: 0");
+        correctionsLabel.setFont(correctionFont);
+        correctionsLabel.setForeground(Color.LIGHT_GRAY);
+        correctionsLabel.setName("correctionsLabel");
+        
+        JLabel lastCorrectionLabel = new JLabel("Последнее: -");
+        lastCorrectionLabel.setFont(correctionFont);
+        lastCorrectionLabel.setForeground(Color.LIGHT_GRAY);
+        lastCorrectionLabel.setName("lastCorrectionLabel");
+        
+        statsPanel.add(correctionsLabel);
+        statsPanel.add(lastCorrectionLabel);
+        
+        // Панель управления
+        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        controlPanel.setBackground(CORRECTION_PANEL_COLOR);
+        
+        JCheckBox enableCheckbox = new JCheckBox("Включить автозамену", true);
+        enableCheckbox.setFont(correctionFont);
+        enableCheckbox.setForeground(Color.LIGHT_GRAY);
+        enableCheckbox.setBackground(CORRECTION_PANEL_COLOR);
+        enableCheckbox.addActionListener(e -> {
+            boolean enabled = enableCheckbox.isSelected();
+            textArea.setEditable(true);
+            if (enabled) {
+                startCorrectionScheduler();
+                showMessage("Автозамена", "Автозамена включена");
+            } else {
+                stopCorrectionScheduler();
+                showMessage("Автозамена", "Автозамена выключена");
+            }
+        });
+        
+        JButton manualCorrectionBtn = new JButton("Проверить сейчас");
+        manualCorrectionBtn.setFont(correctionFont);
+        manualCorrectionBtn.addActionListener(e -> performAutoCorrection());
+        
+        JButton viewRulesBtn = new JButton("Правила");
+        viewRulesBtn.setFont(correctionFont);
+        viewRulesBtn.addActionListener(e -> showCorrectionRules());
+        
+        controlPanel.add(enableCheckbox);
+        controlPanel.add(manualCorrectionBtn);
+        controlPanel.add(viewRulesBtn);
+        
+        correctionPanel.add(titleLabel, BorderLayout.NORTH);
+        correctionPanel.add(statsPanel, BorderLayout.WEST);
+        correctionPanel.add(controlPanel, BorderLayout.EAST);
+        
+        add(correctionPanel, BorderLayout.SOUTH);
+    }
+    
+    private void createMenuBar() {
+        menuBar = new JMenuBar();
+        menuBar.setBackground(new Color(60, 63, 65));
+        menuBar.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 80)));
+        
+        createFileMenu();
+        createEditMenu();
+        createCorrectionMenu();
+        createViewMenu();
+        createHelpMenu();
+        
+        setJMenuBar(menuBar);
+    }
+    
+    private void createCorrectionMenu() {
+        JMenu correctionMenu = new JMenu("Автозамена");
+        correctionMenu.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        correctionMenu.setForeground(TEXT_COLOR);
+        correctionMenu.setMnemonic(KeyEvent.VK_A);
+        
+        JMenuItem addRuleItem = new JMenuItem("Добавить правило...");
+        addRuleItem.addActionListener(e -> addNewCorrectionRule());
+        
+        JMenuItem editRulesItem = new JMenuItem("Редактировать правила...");
+        editRulesItem.addActionListener(e -> editCorrectionRules());
+        
+        JMenuItem importRulesItem = new JMenuItem("Импорт правил...");
+        importRulesItem.addActionListener(e -> importCorrectionRules());
+        
+        JMenuItem exportRulesItem = new JMenuItem("Экспорт правил...");
+        exportRulesItem.addActionListener(e -> exportCorrectionRules());
+        
+        JMenuItem statisticsItem = new JMenuItem("Статистика...");
+        statisticsItem.addActionListener(e -> showCorrectionStatistics());
+        
+        JMenuItem settingsItem = new JMenuItem("Настройки...");
+        settingsItem.addActionListener(e -> showCorrectionSettings());
+        
+        correctionMenu.add(addRuleItem);
+        correctionMenu.add(editRulesItem);
+        correctionMenu.addSeparator();
+        correctionMenu.add(importRulesItem);
+        correctionMenu.add(exportRulesItem);
+        correctionMenu.addSeparator();
+        correctionMenu.add(statisticsItem);
+        correctionMenu.add(settingsItem);
+        
+        menuBar.add(correctionMenu);
+    }
+    
+    private void createStatusBar() {
+        statusBar = new JLabel();
+        statusBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(80, 80, 80)),
+            BorderFactory.createEmptyBorder(3, 10, 3, 10)
+        ));
+        statusBar.setBackground(new Color(50, 50, 50));
+        statusBar.setForeground(new Color(180, 180, 180));
+        statusBar.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        statusBar.setOpaque(true);
+        
+        add(statusBar, BorderLayout.NORTH);
+    }
+    
+    private void setupListeners() {
+        // Слушатель изменений текста
+        textArea.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                textModified();
+                scheduleCorrection();
+                checkForSpaceTrigger(e);
+            }
+            
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                textModified();
+                scheduleCorrection();
+            }
+            
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                textModified();
+            }
+        });
+        
+        // Слушатель нажатий клавиш для триггера пробела
+        textArea.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_SPACE) {
+                    // Немедленная проверка после пробела
+                    SwingUtilities.invokeLater(() -> {
+                        performAutoCorrection();
+                    });
+                }
+            }
+        });
+        
+        // Слушатель позиции курсора
+        textArea.addCaretListener(e -> updateStatusBar());
+        
+        // Глобальные горячие клавиши
+        setupGlobalHotkeys();
+    }
+    
+    private void setupGlobalHotkeys() {
+        // Автозамена по Ctrl+Shift+A
+        getRootPane().registerKeyboardAction(
+            e -> performAutoCorrection(),
+            KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK),
+            JComponent.WHEN_IN_FOCUSED_WINDOW
+        );
+    }
+    
+    private void checkForSpaceTrigger(DocumentEvent e) {
+        try {
+            Document doc = e.getDocument();
+            int offset = e.getOffset();
+            if (offset > 0) {
+                String text = doc.getText(offset - 1, 1);
+                if (text.equals(" ") || text.equals("\n") || text.equals(".") || 
+                    text.equals(",") || text.equals("!") || text.equals("?")) {
+                    // Немедленная проверка после разделителя
+                    SwingUtilities.invokeLater(() -> {
+                        if (!correctionInProgress) {
+                            performAutoCorrection();
+                        }
+                    });
+                }
+            }
+        } catch (BadLocationException ex) {
+            // Игнорируем ошибки позиции
+        }
+    }
+    
+    private void startCorrectionScheduler() {
+        if (scheduler == null || scheduler.isShutdown()) {
+            scheduler = Executors.newScheduledThreadPool(1);
+        }
+        
+        if (correctionTask != null && !correctionTask.isDone()) {
+            correctionTask.cancel(false);
+        }
+        
+        // Планируем проверку каждые 2 секунды
+        correctionTask = scheduler.scheduleAtFixedRate(() -> {
+            if (!correctionInProgress && textArea.isEditable()) {
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastTextChangeTime > CORRECTION_DELAY_MS) {
+                    SwingUtilities.invokeLater(this::performAutoCorrection);
+                }
+            }
+        }, 2, 2, TimeUnit.SECONDS);
+    }
+    
+    private void stopCorrectionScheduler() {
+        if (correctionTask != null) {
+            correctionTask.cancel(false);
+        }
+        if (scheduler != null) {
+            scheduler.shutdown();
+        }
+    }
+    
+    private void scheduleCorrection() {
+        lastTextChangeTime = System.currentTimeMillis();
+    }
+    
+    private void performAutoCorrection() {
+        if (correctionInProgress || !textArea.isEditable()) {
+            return;
+        }
+        
+        correctionInProgress = true;
+        
+        SwingWorker<Void, CorrectionResult> worker = new SwingWorker<>() {
+            private List<CorrectionResult> corrections = new ArrayList<>();
+            
+            @Override
+            protected Void doInBackground() throws Exception {
+                String text = textArea.getText();
+                if (text.length() < MIN_CHARS_FOR_CORRECTION) {
+                    return null;
+                }
+                
+                // Разбиваем текст на слова
+                Pattern wordPattern = Pattern.compile("\\b\\p{L}+\\b");
+                Matcher matcher = wordPattern.matcher(text);
+                
+                // Находим и исправляем слова
+                StringBuilder correctedText = new StringBuilder(text);
+                int offsetAdjustment = 0;
+                
+                while (matcher.find()) {
+                    String word = matcher.group().toLowerCase();
+                    if (autoCorrectMap.containsKey(word)) {
+                        String correctWord = autoCorrectMap.get(word);
+                        String originalWord = text.substring(matcher.start(), matcher.end());
+                        
+                        // Сохраняем регистр исходного слова
+                        String replacement = preserveCase(originalWord, correctWord);
+                        
+                        int start = matcher.start() + offsetAdjustment;
+                        int end = matcher.end() + offsetAdjustment;
+                        
+                        // Заменяем слово в исправленном тексте
+                        correctedText.replace(start, end, replacement);
+                        
+                        // Корректируем смещение для следующих замен
+                        offsetAdjustment += replacement.length() - originalWord.length();
+                        
+                        // Сохраняем информацию об исправлении
+                        corrections.add(new CorrectionResult(
+                            originalWord, replacement, matcher.start(), matcher.end()
+                        ));
+                    }
+                }
+                
+                // Публикуем промежуточные результаты
+                if (!corrections.isEmpty()) {
+                    publish(corrections.toArray(new CorrectionResult[0]));
+                }
+                
+                // Применяем исправления к тексту
+                final String finalText = correctedText.toString();
+                if (!text.equals(finalText)) {
+                    SwingUtilities.invokeLater(() -> {
+                        textArea.setText(finalText);
+                        totalCorrections += corrections.size();
+                        lastSessionCorrections = corrections.size();
+                        updateCorrectionPanel();
+                        
+                        // Подсветка исправленных слов
+                        highlightCorrections(corrections);
+                        
+                        if (!corrections.isEmpty()) {
+                            showCorrectionNotification(corrections);
+                        }
+                    });
+                }
+                
+                return null;
+            }
+            
+            @Override
+            protected void done() {
+                correctionInProgress = false;
+            }
+            
+            @Override
+            protected void process(List<CorrectionResult[]> chunks) {
+                // Можно обновлять UI во время обработки
+            }
+        };
+        
+        worker.execute();
+    }
+    
+    private String preserveCase(String original, String corrected) {
+        if (original.isEmpty() || corrected.isEmpty()) {
+            return corrected;
+        }
+        
+        // Проверяем регистр исходного слова
+        if (original.equals(original.toUpperCase())) {
+            // ВСЁ СЛОВО В ВЕРХНЕМ РЕГИСТРЕ
+            return corrected.toUpperCase();
+        } else if (Character.isUpperCase(original.charAt(0)) && 
+                   original.substring(1).equals(original.substring(1).toLowerCase())) {
+            // Первая буква заглавная, остальные строчные
+            return corrected.substring(0, 1).toUpperCase() + corrected.substring(1).toLowerCase();
+        } else if (Character.isUpperCase(original.charAt(0))) {
+            // Первая буква заглавная, остальные как есть
+            return corrected.substring(0, 1).toUpperCase() + corrected.substring(1);
+        } else {
+            // Все буквы строчные
+            return corrected.toLowerCase();
+        }
+    }
+    
+    private void highlightCorrections(List<CorrectionResult> corrections) {
+        // Снимаем предыдущее выделение
+        textArea.getHighlighter().removeAllHighlights();
+        
+        // Добавляем новое выделение
+        Highlighter highlighter = textArea.getHighlighter();
+        for (CorrectionResult correction : corrections) {
+            try {
+                highlighter.addHighlight(correction.start, correction.end, 
+                    new DefaultHighlighter.DefaultHighlightPainter(HIGHLIGHT_COLOR));
+            } catch (BadLocationException e) {
+                // Игнорируем ошибки позиции
+            }
+        }
+        
+        // Через 3 секунды убираем выделение
+        Timer timer = new Timer(3000, e -> {
+            textArea.getHighlighter().removeAllHighlights();
+        });
+        timer.setRepeats(false);
+        timer.start();
+    }
+    
+    private void showCorrectionNotification(List<CorrectionResult> corrections) {
+        if (corrections.isEmpty()) return;
+        
+        StringBuilder message = new StringBuilder();
+        message.append("Исправлено ").append(corrections.size()).append(" слов:\n\n");
+        
+        int count = Math.min(corrections.size(), 5);
+        for (int i = 0; i < count; i++) {
+            CorrectionResult cr = corrections.get(i);
+            message.append("• \"").append(cr.original)
+                   .append("\" → \"").append(cr.corrected).append("\"\n");
+        }
+        
+        if (corrections.size() > 5) {
+            message.append("... и еще ").append(corrections.size() - 5).append(" слов");
+        }
+        
+        // Показываем всплывающее уведомление
+        JOptionPane.showMessageDialog(this,
+            message.toString(),
+            "Автозамена",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void updateCorrectionPanel() {
+        Component[] components = correctionPanel.getComponents();
+        for (Component comp : components) {
+            if (comp instanceof JPanel) {
+                Component[] subComps = ((JPanel) comp).getComponents();
+                for (Component subComp : subComps) {
+                    if (subComp instanceof JLabel) {
+                        JLabel label = (JLabel) subComp;
+                        if ("correctionsLabel".equals(label.getName())) {
+                            label.setText("Исправлений: " + totalCorrections);
+                        } else if ("lastCorrectionLabel".equals(label.getName())) {
+                            if (lastSessionCorrections > 0) {
+                                label.setText("Последнее: " + lastSessionCorrections + " слов");
+                            } else {
+                                label.setText("Последнее: -");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        correctionPanel.revalidate();
+        correctionPanel.repaint();
+    }
+    
+    private void addNewCorrectionRule() {
+        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
+        
+        JTextField wrongField = new JTextField(20);
+        JTextField correctField = new JTextField(20);
+        
+        panel.add(new JLabel("Неправильное слово:"));
+        panel.add(wrongField);
+        panel.add(new JLabel("Правильное слово:"));
+        panel.add(correctField);
+        
+        int result = JOptionPane.showConfirmDialog(this,
+            panel,
+            "Добавить правило автозамены",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        
+        if (result == JOptionPane.OK_OPTION) {
+            String wrong = wrongField.getText().trim().toLowerCase();
+            String correct = correctField.getText().trim();
+            
+            if (!wrong.isEmpty() && !correct.isEmpty()) {
+                autoCorrectMap.put(wrong, correct);
+                saveAutoCorrectRulesToFile();
+                showMessage("Правило добавлено", 
+                    "Добавлено правило: \"" + wrong + "\" → \"" + correct + "\"");
+            }
+        }
+    }
+    
+    private void editCorrectionRules() {
+        JTextArea rulesArea = new JTextArea(20, 40);
+        rulesArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        
+        // Формируем текст правил
+        StringBuilder rulesText = new StringBuilder();
+        rulesText.append("# Правила автозамены\n");
+        rulesText.append("# Формат: неправильное=правильное\n\n");
+        
+        List<String> sortedKeys = new ArrayList<>(autoCorrectMap.keySet());
+        Collections.sort(sortedKeys);
+        
+        for (String wrong : sortedKeys) {
+            String correct = autoCorrectMap.get(wrong);
+            rulesText.append(wrong).append("=").append(correct).append("\n");
+        }
+        
+        rulesArea.setText(rulesText.toString());
+        
+        int result = JOptionPane.showConfirmDialog(this,
+            new JScrollPane(rulesArea),
+            "Редактировать правила автозамены",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        
+        if (result == JOptionPane.OK_OPTION) {
+            // Парсим новые правила
+            Map<String, String> newMap = new HashMap<>();
+            String[] lines = rulesArea.getText().split("\n");
+            
+            for (String line : lines) {
+                line = line.trim();
+                if (!line.isEmpty() && !line.startsWith("#")) {
+                    String[] parts = line.split("=");
+                    if (parts.length == 2) {
+                        String wrong = parts[0].trim().toLowerCase();
+                        String correct = parts[1].trim();
+                        newMap.put(wrong, correct);
+                    }
+                }
+            }
+            
+            autoCorrectMap = newMap;
+            saveAutoCorrectRulesToFile();
+            showMessage("Правила обновлены", 
+                "Загружено " + autoCorrectMap.size() + " правил автозамены");
+        }
+    }
+    
+    private void importCorrectionRules() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+            "Текстовые файлы (*.txt)", "txt"));
+        
+        if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            try (BufferedReader reader = new BufferedReader(
+                    new FileReader(file, StandardCharsets.UTF_8))) {
+                
+                Map<String, String> importedMap = new HashMap<>();
+                String line;
+                int count = 0;
+                
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (!line.isEmpty() && !line.startsWith("#")) {
+                        String[] parts = line.split("=");
+                        if (parts.length == 2) {
+                            String wrong = parts[0].trim().toLowerCase();
+                            String correct = parts[1].trim();
+                            importedMap.put(wrong, correct);
+                            count++;
+                        }
+                    }
+                }
+                
+                autoCorrectMap.putAll(importedMap);
+                saveAutoCorrectRulesToFile();
+                showMessage("Импорт завершен", 
+                    "Импортировано " + count + " правил. Всего правил: " + autoCorrectMap.size());
+                
+            } catch (IOException e) {
+                showError("Ошибка импорта", "Не удалось импортировать правила: " + e.getMessage());
+            }
+        }
+    }
+    
+    private void exportCorrectionRules() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setSelectedFile(new File("autocorrect_rules.txt"));
+        
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = fileChooser.getSelectedFile();
+            try (BufferedWriter writer = new BufferedWriter(
+                    new FileWriter(file, StandardCharsets.UTF_8))) {
+                
+                writer.write("# Правила автозамены\n");
+                writer.write("# Создано: " + new Date() + "\n");
+                writer.write("# Всего правил: " + autoCorrectMap.size() + "\n\n");
+                
+                List<String> sortedKeys = new ArrayList<>(autoCorrectMap.keySet());
+                Collections.sort(sortedKeys);
+                
+                for (String wrong : sortedKeys) {
+                    String correct = autoCorrectMap.get(wrong);
+                    writer.write(wrong + "=" + correct + "\n");
+                }
+                
+                showMessage("Экспорт завершен", 
+                    "Правила экспортированы в файл: " + file.getName());
+                
+            } catch (IOException e) {
+                showError("Ошибка экспорта", "Не удалось экспортировать правила: " + e.getMessage());
+            }
+        }
+    }
+    
+    private void saveAutoCorrectRulesToFile() {
+        File rulesFile = new File("autocorrect_rules.txt");
+        try (BufferedWriter writer = new BufferedWriter(
+                new FileWriter(rulesFile, StandardCharsets.UTF_8))) {
+            
+            List<String> sortedKeys = new ArrayList<>(autoCorrectMap.keySet());
+            Collections.sort(sortedKeys);
+            
+            for (String wrong : sortedKeys) {
+                String correct = autoCorrectMap.get(wrong);
+                writer.write(wrong + "=" + correct + "\n");
+            }
+            
+        } catch (IOException e) {
+            System.err.println("Не удалось сохранить правила: " + e.getMessage());
+        }
+    }
+    
+    private void showCorrectionRules() {
+        StringBuilder message = new StringBuilder();
+        message.append("Всего правил автозамены: ").append(autoCorrectMap.size()).append("\n\n");
+        
+        List<String> sortedKeys = new ArrayList<>(autoCorrectMap.keySet());
+        Collections.sort(sortedKeys);
+        
+        int count = 0;
+        for (String wrong : sortedKeys) {
+            if (count >= 50) {
+                message.append("\n... и еще ").append(autoCorrectMap.size() - 50).append(" правил");
+                break;
+            }
+            String correct = autoCorrectMap.get(wrong);
+            message.append("• \"").append(wrong).append("\" → \"").append(correct).append("\"\n");
+            count++;
+        }
+        
+        JOptionPane.showMessageDialog(this,
+            message.toString(),
+            "Правила автозамены",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void showCorrectionStatistics() {
+        String stats = String.format("""
+            <html>
+            <h2>Статистика автозамены</h2>
+            <table border="0" cellpadding="5">
+            <tr><td><b>Всего исправлений:</b></td><td>%d</td></tr>
+            <tr><td><b>В этой сессии:</b></td><td>%d</td></tr>
+            <tr><td><b>Всего правил:</b></td><td>%d</td></tr>
+            <tr><td><b>Последняя проверка:</b></td><td>%s</td></tr>
+            </table>
+            </html>
+            """, totalCorrections, lastSessionCorrections, autoCorrectMap.size(),
+            new Date(lastTextChangeTime));
+        
+        JOptionPane.showMessageDialog(this,
+            stats,
+            "Статистика",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void showCorrectionSettings() {
+        JPanel panel = new JPanel(new GridLayout(3, 2, 5, 5));
+        
+        JCheckBox autoCheckBox = new JCheckBox("Автоматическая проверка", true);
+        JCheckBox highlightCheckBox = new JCheckBox("Подсвечивать исправления", true);
+        JCheckBox notifyCheckBox = new JCheckBox("Показывать уведомления", true);
+        
+        panel.add(autoCheckBox);
+        panel.add(highlightCheckBox);
+        panel.add(notifyCheckBox);
+        
+        int result = JOptionPane.showConfirmDialog(this,
+            panel,
+            "Настройки автозамены",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        
+        // Здесь можно сохранить настройки
+    }
+    
+    // Остальные методы из предыдущей версии (newFile, openFile, saveFile и т.д.)
+    // Они остаются без изменений, добавляем только заглушки для компиляции
+    
+    private void textModified() {
+        isModified = true;
+        updateTitle();
+        updateStatusBar();
+    }
+    
+    private void updateTitle() {
+        String title = "Текстовый редактор с автозаменой";
+        if (currentFile != null) {
+            title = currentFile.getName() + " - " + title;
+        }
+        if (isModified) {
+            title = "*" + title;
+        }
+        setTitle(title);
+    }
+    
+    private void updateStatusBar() {
+        // Упрощенная версия для демонстрации
+        statusBar.setText("Готово | Автозамена активна");
+    }
+    
+    private void showMessage(String title, String message) {
+        JOptionPane.showMessageDialog(this, message, title, JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void showError(String title, String message) {
+        JOptionPane.showMessageDialog(this, message, title, JOptionPane.ERROR_MESSAGE);
+    }
+    
+    private void exitApplication() {
+        stopCorrectionScheduler();
+        dispose();
+        System.exit(0);
+    }
+    
+    // Вспомогательный класс для хранения результатов исправления
+    private static class CorrectionResult {
+        String original;
+        String corrected;
+        int start;
+        int end;
+        
+        CorrectionResult(String original, String corrected, int start, int end) {
+            this.original = original;
+            this.corrected = corrected;
+            this.start = start;
+            this.end = end;
+        }
+    }
+    
+    // Простые реализации остальных методов меню
+    private void createFileMenu() {
+        JMenu fileMenu = new JMenu("Файл");
+        menuBar.add(fileMenu);
+        
+        JMenuItem newItem = new JMenuItem("Создать");
+        newItem.addActionListener(e -> newFile());
+        fileMenu.add(newItem);
+    }
+    
+    private void createEditMenu() {
+        JMenu editMenu = new JMenu("Правка");
+        menuBar.add(editMenu);
+    }
+    
+    private void createViewMenu() {
+        JMenu viewMenu = new JMenu("Вид");
+        menuBar.add(viewMenu);
+    }
+    
+    private void createHelpMenu() {
+        JMenu helpMenu = new JMenu("Справка");
+        menuBar.add(helpMenu);
+    }
+    
+    private void newFile() {
+        textArea.setText("");
+        currentFile = null;
+        isModified = false;
+        updateTitle();
+    }
+    
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            new TextEditorWithAutoCorrect();
+        });
+    }
+}
