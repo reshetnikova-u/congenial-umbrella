@@ -1,0 +1,918 @@
+import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+public class TextEditor extends JFrame {
+    
+    // Компоненты интерфейса
+    private JTextArea textArea;
+    private JScrollPane scrollPane;
+    private JMenuBar menuBar;
+    private JLabel statusBar;
+    
+    // Переменные состояния
+    private File currentFile;
+    private boolean isModified = false;
+    private String originalContent = "";
+    
+    // Цвета
+    private final Color BACKGROUND_COLOR = new Color(45, 45, 45);
+    private final Color TEXT_AREA_COLOR = new Color(60, 63, 65);
+    private final Color TEXT_COLOR = new Color(220, 220, 220);
+    private final Color STATUS_BAR_COLOR = new Color(50, 50, 50);
+    private final Color STATUS_TEXT_COLOR = new Color(180, 180, 180);
+    
+    // Шрифты
+    private Font textFont = new Font("Consolas", Font.PLAIN, 14);
+    private Font menuFont = new Font("Segoe UI", Font.PLAIN, 12);
+    private Font statusFont = new Font("Segoe UI", Font.PLAIN, 11);
+    
+    // Константы
+    private static final String APP_NAME = "Текстовый редактор";
+    private static final String APP_VERSION = "1.0";
+    private static final String[] SUPPORTED_EXTENSIONS = {"txt", "java", "html", "css", "js", "xml", "json"};
+    
+    public TextEditor() {
+        initializeUI();
+        setupListeners();
+        updateTitle();
+        updateStatusBar();
+    }
+    
+    private void initializeUI() {
+        // Настройка главного окна
+        setTitle(APP_NAME);
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        setSize(900, 600);
+        setLocationRelativeTo(null); // Центрирование окна
+        setLayout(new BorderLayout());
+        getContentPane().setBackground(BACKGROUND_COLOR);
+        
+        // Установка иконки
+        setIconImage(createDefaultIcon());
+        
+        // Создание компонентов
+        createTextArea();
+        createMenuBar();
+        createStatusBar();
+        
+        // Добавление обработчика закрытия окна
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                exitApplication();
+            }
+        });
+        
+        // Включение перетаскивания файлов
+        setupDragAndDrop();
+        
+        setVisible(true);
+    }
+    
+    private Image createDefaultIcon() {
+        // Создание простой иконки редактора
+        ImageIcon icon = new ImageIcon();
+        try {
+            // Можно загрузить иконку из файла
+            // icon = new ImageIcon("icon.png");
+        } catch (Exception e) {
+            // Создаем простую иконку программно
+            BufferedImage image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2d = image.createGraphics();
+            
+            // Рисуем простую иконку текстового редактора
+            g2d.setColor(new Color(70, 130, 180));
+            g2d.fillRect(4, 4, 24, 24);
+            g2d.setColor(Color.WHITE);
+            g2d.setFont(new Font("Arial", Font.BOLD, 14));
+            g2d.drawString("T", 12, 20);
+            
+            g2d.dispose();
+            icon = new ImageIcon(image);
+        }
+        return icon.getImage();
+    }
+    
+    private void createTextArea() {
+        textArea = new JTextArea();
+        textArea.setFont(textFont);
+        textArea.setBackground(TEXT_AREA_COLOR);
+        textArea.setForeground(TEXT_COLOR);
+        textArea.setCaretColor(Color.WHITE);
+        textArea.setSelectionColor(new Color(0, 120, 215));
+        textArea.setSelectedTextColor(Color.WHITE);
+        textArea.setTabSize(4);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        
+        // Настройка границ
+        textArea.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(80, 80, 80), 1),
+            BorderFactory.createEmptyBorder(10, 10, 10, 10)
+        ));
+        
+        scrollPane = new JScrollPane(textArea);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUI(new CustomScrollBarUI());
+        scrollPane.getHorizontalScrollBar().setUI(new CustomScrollBarUI());
+        
+        add(scrollPane, BorderLayout.CENTER);
+    }
+    
+    private void createMenuBar() {
+        menuBar = new JMenuBar();
+        menuBar.setBackground(new Color(60, 63, 65));
+        menuBar.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 80)));
+        
+        createFileMenu();
+        createEditMenu();
+        createFormatMenu();
+        createViewMenu();
+        createHelpMenu();
+        
+        setJMenuBar(menuBar);
+    }
+    
+    private void createFileMenu() {
+        JMenu fileMenu = new JMenu("Файл");
+        fileMenu.setFont(menuFont);
+        fileMenu.setForeground(TEXT_COLOR);
+        fileMenu.setMnemonic(KeyEvent.VK_F);
+        
+        // Создание пунктов меню
+        JMenuItem newItem = createMenuItem("Создать", "Создать новый документ", 
+                                          KeyEvent.VK_N, KeyEvent.CTRL_DOWN_MASK, "new.png");
+        JMenuItem openItem = createMenuItem("Открыть...", "Открыть существующий файл", 
+                                           KeyEvent.VK_O, KeyEvent.CTRL_DOWN_MASK, "open.png");
+        JMenuItem saveItem = createMenuItem("Сохранить", "Сохранить текущий файл", 
+                                           KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK, "save.png");
+        JMenuItem saveAsItem = createMenuItem("Сохранить как...", "Сохранить файл с новым именем", 
+                                             KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK | KeyEvent.SHIFT_DOWN_MASK, "save_as.png");
+        
+        fileMenu.add(newItem);
+        fileMenu.add(openItem);
+        fileMenu.addSeparator();
+        fileMenu.add(saveItem);
+        fileMenu.add(saveAsItem);
+        fileMenu.addSeparator();
+        
+        // Список недавних файлов
+        JMenu recentMenu = new JMenu("Недавние файлы");
+        recentMenu.setFont(menuFont);
+        recentMenu.setForeground(TEXT_COLOR);
+        updateRecentFilesMenu(recentMenu);
+        fileMenu.add(recentMenu);
+        fileMenu.addSeparator();
+        
+        JMenuItem exitItem = createMenuItem("Выход", "Выйти из программы", 
+                                           KeyEvent.VK_Q, KeyEvent.CTRL_DOWN_MASK, "exit.png");
+        fileMenu.add(exitItem);
+        
+        // Добавление обработчиков событий
+        newItem.addActionListener(e -> newFile());
+        openItem.addActionListener(e -> openFile());
+        saveItem.addActionListener(e -> saveFile());
+        saveAsItem.addActionListener(e -> saveFileAs());
+        exitItem.addActionListener(e -> exitApplication());
+        
+        menuBar.add(fileMenu);
+    }
+    
+    private void createEditMenu() {
+        JMenu editMenu = new JMenu("Правка");
+        editMenu.setFont(menuFont);
+        editMenu.setForeground(TEXT_COLOR);
+        editMenu.setMnemonic(KeyEvent.VK_E);
+        
+        JMenuItem undoItem = createMenuItem("Отменить", "Отменить последнее действие", 
+                                           KeyEvent.VK_Z, KeyEvent.CTRL_DOWN_MASK, "undo.png");
+        JMenuItem redoItem = createMenuItem("Повторить", "Повторить отмененное действие", 
+                                           KeyEvent.VK_Y, KeyEvent.CTRL_DOWN_MASK, "redo.png");
+        editMenu.add(undoItem);
+        editMenu.add(redoItem);
+        editMenu.addSeparator();
+        
+        JMenuItem cutItem = createMenuItem("Вырезать", "Вырезать выделенный текст", 
+                                          KeyEvent.VK_X, KeyEvent.CTRL_DOWN_MASK, "cut.png");
+        JMenuItem copyItem = createMenuItem("Копировать", "Копировать выделенный текст", 
+                                           KeyEvent.VK_C, KeyEvent.CTRL_DOWN_MASK, "copy.png");
+        JMenuItem pasteItem = createMenuItem("Вставить", "Вставить текст из буфера обмена", 
+                                            KeyEvent.VK_V, KeyEvent.CTRL_DOWN_MASK, "paste.png");
+        editMenu.add(cutItem);
+        editMenu.add(copyItem);
+        editMenu.add(pasteItem);
+        editMenu.addSeparator();
+        
+        JMenuItem selectAllItem = createMenuItem("Выделить все", "Выделить весь текст", 
+                                                KeyEvent.VK_A, KeyEvent.CTRL_DOWN_MASK, "select_all.png");
+        JMenuItem findItem = createMenuItem("Найти...", "Найти текст в документе", 
+                                           KeyEvent.VK_F, KeyEvent.CTRL_DOWN_MASK, "find.png");
+        JMenuItem replaceItem = createMenuItem("Заменить...", "Найти и заменить текст", 
+                                              KeyEvent.VK_H, KeyEvent.CTRL_DOWN_MASK, "replace.png");
+        editMenu.add(selectAllItem);
+        editMenu.add(findItem);
+        editMenu.add(replaceItem);
+        
+        // Добавление обработчиков событий
+        undoItem.addActionListener(e -> textArea.getUndoManager().undo());
+        redoItem.addActionListener(e -> textArea.getUndoManager().redo());
+        cutItem.addActionListener(e -> textArea.cut());
+        copyItem.addActionListener(e -> textArea.copy());
+        pasteItem.addActionListener(e -> textArea.paste());
+        selectAllItem.addActionListener(e -> textArea.selectAll());
+        findItem.addActionListener(e -> showFindDialog());
+        replaceItem.addActionListener(e -> showReplaceDialog());
+        
+        menuBar.add(editMenu);
+    }
+    
+    private void createFormatMenu() {
+        JMenu formatMenu = new JMenu("Формат");
+        formatMenu.setFont(menuFont);
+        formatMenu.setForeground(TEXT_COLOR);
+        formatMenu.setMnemonic(KeyEvent.VK_R);
+        
+        JMenuItem wordWrapItem = new JCheckBoxMenuItem("Перенос по словам");
+        wordWrapItem.setSelected(true);
+        wordWrapItem.addActionListener(e -> {
+            textArea.setLineWrap(wordWrapItem.isSelected());
+            textArea.setWrapStyleWord(wordWrapItem.isSelected());
+        });
+        
+        JMenu fontSizeMenu = new JMenu("Размер шрифта");
+        int[] fontSizes = {8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 28, 32};
+        for (int size : fontSizes) {
+            JMenuItem sizeItem = new JMenuItem(size + " pt");
+            sizeItem.addActionListener(e -> {
+                textArea.setFont(new Font(textFont.getFamily(), textFont.getStyle(), size));
+                updateStatusBar();
+            });
+            fontSizeMenu.add(sizeItem);
+        }
+        
+        JMenu fontFamilyMenu = new JMenu("Шрифт");
+        String[] fontFamilies = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getAvailableFontFamilyNames();
+        for (String fontFamily : fontFamilies) {
+            if (fontFamily.length() < 30) { // Пропускаем слишком длинные имена
+                JMenuItem fontItem = new JMenuItem(fontFamily);
+                fontItem.setFont(new Font(fontFamily, Font.PLAIN, 12));
+                fontItem.addActionListener(e -> {
+                    textArea.setFont(new Font(fontFamily, textFont.getStyle(), textFont.getSize()));
+                    updateStatusBar();
+                });
+                fontFamilyMenu.add(fontItem);
+            }
+        }
+        
+        JMenuItem darkThemeItem = new JCheckBoxMenuItem("Темная тема");
+        darkThemeItem.setSelected(true);
+        darkThemeItem.addActionListener(e -> toggleTheme(darkThemeItem.isSelected()));
+        
+        formatMenu.add(wordWrapItem);
+        formatMenu.addSeparator();
+        formatMenu.add(fontSizeMenu);
+        formatMenu.add(fontFamilyMenu);
+        formatMenu.addSeparator();
+        formatMenu.add(darkThemeItem);
+        
+        menuBar.add(formatMenu);
+    }
+    
+    private void createViewMenu() {
+        JMenu viewMenu = new JMenu("Вид");
+        viewMenu.setFont(menuFont);
+        viewMenu.setForeground(TEXT_COLOR);
+        viewMenu.setMnemonic(KeyEvent.VK_V);
+        
+        JCheckBoxMenuItem statusBarItem = new JCheckBoxMenuItem("Строка состояния");
+        statusBarItem.setSelected(true);
+        statusBarItem.addActionListener(e -> {
+            statusBar.setVisible(statusBarItem.isSelected());
+            updateStatusBar();
+        });
+        
+        JMenuItem zoomInItem = createMenuItem("Увеличить", "Увеличить масштаб текста", 
+                                            KeyEvent.VK_PLUS, KeyEvent.CTRL_DOWN_MASK, null);
+        JMenuItem zoomOutItem = createMenuItem("Уменьшить", "Уменьшить масштаб текста", 
+                                             KeyEvent.VK_MINUS, KeyEvent.CTRL_DOWN_MASK, null);
+        JMenuItem resetZoomItem = createMenuItem("Сбросить масштаб", "Вернуть масштаб по умолчанию", 
+                                               KeyEvent.VK_0, KeyEvent.CTRL_DOWN_MASK, null);
+        
+        viewMenu.add(statusBarItem);
+        viewMenu.addSeparator();
+        viewMenu.add(zoomInItem);
+        viewMenu.add(zoomOutItem);
+        viewMenu.add(resetZoomItem);
+        
+        // Добавление обработчиков событий
+        zoomInItem.addActionListener(e -> changeFontSize(1));
+        zoomOutItem.addActionListener(e -> changeFontSize(-1));
+        resetZoomItem.addActionListener(e -> resetFontSize());
+        
+        menuBar.add(viewMenu);
+    }
+    
+    private void createHelpMenu() {
+        JMenu helpMenu = new JMenu("Справка");
+        helpMenu.setFont(menuFont);
+        helpMenu.setForeground(TEXT_COLOR);
+        helpMenu.setMnemonic(KeyEvent.VK_H);
+        
+        JMenuItem aboutItem = createMenuItem("О программе", "Информация о программе", 
+                                            KeyEvent.VK_F1, 0, "about.png");
+        JMenuItem shortcutsItem = createMenuItem("Горячие клавиши", "Список горячих клавиш", 
+                                               KeyEvent.VK_K, KeyEvent.CTRL_DOWN_MASK, "shortcuts.png");
+        
+        helpMenu.add(aboutItem);
+        helpMenu.add(shortcutsItem);
+        
+        // Добавление обработчиков событий
+        aboutItem.addActionListener(e -> showAboutDialog());
+        shortcutsItem.addActionListener(e -> showShortcutsDialog());
+        
+        menuBar.add(helpMenu);
+    }
+    
+    private JMenuItem createMenuItem(String text, String tooltip, int keyCode, int modifiers, String iconName) {
+        JMenuItem item = new JMenuItem(text);
+        item.setFont(menuFont);
+        item.setForeground(TEXT_COLOR);
+        item.setBackground(new Color(60, 63, 65));
+        item.setToolTipText(tooltip);
+        
+        if (keyCode != 0) {
+            item.setAccelerator(KeyStroke.getKeyStroke(keyCode, modifiers));
+        }
+        
+        // Установка иконки (заглушка)
+        if (iconName != null) {
+            // Здесь можно загрузить реальную иконку
+            // item.setIcon(new ImageIcon(iconName));
+        }
+        
+        // Эффекты при наведении
+        item.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                item.setBackground(new Color(0, 120, 215));
+                item.setForeground(Color.WHITE);
+            }
+            
+            @Override
+            public void mouseExited(MouseEvent e) {
+                item.setBackground(new Color(60, 63, 65));
+                item.setForeground(TEXT_COLOR);
+            }
+        });
+        
+        return item;
+    }
+    
+    private void createStatusBar() {
+        statusBar = new JLabel();
+        statusBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(80, 80, 80)),
+            BorderFactory.createEmptyBorder(3, 10, 3, 10)
+        ));
+        statusBar.setBackground(STATUS_BAR_COLOR);
+        statusBar.setForeground(STATUS_TEXT_COLOR);
+        statusBar.setFont(statusFont);
+        statusBar.setOpaque(true);
+        
+        add(statusBar, BorderLayout.SOUTH);
+    }
+    
+    private void setupListeners() {
+        // Слушатель изменений в тексте
+        textArea.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                textModified();
+            }
+            
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                textModified();
+            }
+            
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                textModified();
+            }
+        });
+        
+        // Слушатель позиции курсора
+        textArea.addCaretListener(e -> updateStatusBar());
+        
+        // Глобальные горячие клавиши
+        setupGlobalHotkeys();
+    }
+    
+    private void setupGlobalHotkeys() {
+        // Сохранение по Ctrl+S
+        getRootPane().registerKeyboardAction(
+            e -> saveFile(),
+            KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
+            JComponent.WHEN_IN_FOCUSED_WINDOW
+        );
+        
+        // Открытие по Ctrl+O
+        getRootPane().registerKeyboardAction(
+            e -> openFile(),
+            KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.CTRL_DOWN_MASK),
+            JComponent.WHEN_IN_FOCUSED_WINDOW
+        );
+        
+        // Новый файл по Ctrl+N
+        getRootPane().registerKeyboardAction(
+            e -> newFile(),
+            KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK),
+            JComponent.WHEN_IN_FOCUSED_WINDOW
+        );
+    }
+    
+    private void setupDragAndDrop() {
+        new DropTarget(textArea, new DropTargetAdapter() {
+            @Override
+            public void drop(DropTargetDropEvent dtde) {
+                try {
+                    dtde.acceptDrop(DnDConstants.ACTION_COPY);
+                    java.util.List<java.io.File> files = (java.util.List<java.io.File>)
+                        dtde.getTransferable().getTransferData(
+                            java.awt.datatransfer.DataFlavor.javaFileListFlavor);
+                    
+                    if (files.size() > 0) {
+                        File file = files.get(0);
+                        if (file.isFile() && file.canRead()) {
+                            if (checkUnsavedChanges()) {
+                                loadFile(file);
+                            }
+                        }
+                    }
+                    
+                    dtde.dropComplete(true);
+                } catch (Exception e) {
+                    dtde.dropComplete(false);
+                    showError("Ошибка при открытии файла", e.getMessage());
+                }
+            }
+        });
+    }
+    
+    // Основные функции редактора
+    
+    private void newFile() {
+        if (!checkUnsavedChanges()) {
+            return;
+        }
+        
+        textArea.setText("");
+        currentFile = null;
+        originalContent = "";
+        isModified = false;
+        updateTitle();
+        updateStatusBar();
+        textArea.requestFocus();
+    }
+    
+    private void openFile() {
+        if (!checkUnsavedChanges()) {
+            return;
+        }
+        
+        JFileChooser fileChooser = createFileChooser();
+        fileChooser.setDialogTitle("Открыть файл");
+        
+        int result = fileChooser.showOpenDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            loadFile(selectedFile);
+        }
+    }
+    
+    private void loadFile(File file) {
+        try {
+            // Определяем кодировку
+            String encoding = detectEncoding(file);
+            
+            // Читаем содержимое файла
+            String content = new String(Files.readAllBytes(file.toPath()), encoding);
+            
+            // Устанавливаем текст в редактор
+            textArea.setText(content);
+            originalContent = content;
+            currentFile = file;
+            isModified = false;
+            
+            // Добавляем файл в историю
+            addToRecentFiles(file);
+            
+            // Обновляем интерфейс
+            updateTitle();
+            updateStatusBar();
+            textArea.setCaretPosition(0);
+            
+            showMessage("Файл открыт", "Файл успешно загружен: " + file.getName());
+            
+        } catch (IOException e) {
+            showError("Ошибка при открытии файла", e.getMessage());
+        } catch (Exception e) {
+            showError("Ошибка", "Не удалось открыть файл: " + e.getMessage());
+        }
+    }
+    
+    private void saveFile() {
+        if (currentFile == null) {
+            saveFileAs();
+        } else {
+            saveToFile(currentFile);
+        }
+    }
+    
+    private void saveFileAs() {
+        JFileChooser fileChooser = createFileChooser();
+        fileChooser.setDialogTitle("Сохранить как");
+        
+        if (currentFile != null) {
+            fileChooser.setSelectedFile(currentFile);
+        }
+        
+        int result = fileChooser.showSaveDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            
+            // Добавляем расширение .txt если его нет
+            if (!hasExtension(selectedFile.getName())) {
+                selectedFile = new File(selectedFile.getAbsolutePath() + ".txt");
+            }
+            
+            // Проверяем, существует ли файл
+            if (selectedFile.exists()) {
+                int confirm = JOptionPane.showConfirmDialog(this,
+                    "Файл \"" + selectedFile.getName() + "\" уже существует.\nЗаменить?",
+                    "Подтверждение",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+                
+                if (confirm != JOptionPane.YES_OPTION) {
+                    return;
+                }
+            }
+            
+            saveToFile(selectedFile);
+        }
+    }
+    
+    private void saveToFile(File file) {
+        try {
+            String content = textArea.getText();
+            
+            // Сохраняем в UTF-8
+            Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
+            
+            // Обновляем состояние
+            currentFile = file;
+            originalContent = content;
+            isModified = false;
+            
+            // Добавляем файл в историю
+            addToRecentFiles(file);
+            
+            // Обновляем интерфейс
+            updateTitle();
+            updateStatusBar();
+            
+            showMessage("Файл сохранен", "Файл успешно сохранен: " + file.getName());
+            
+        } catch (IOException e) {
+            showError("Ошибка при сохранении файла", e.getMessage());
+        }
+    }
+    
+    private boolean checkUnsavedChanges() {
+        if (!isModified) {
+            return true;
+        }
+        
+        String message = "В документе есть несохраненные изменения.\nХотите сохранить?";
+        String title = "Несохраненные изменения";
+        
+        int result = JOptionPane.showConfirmDialog(this,
+            message,
+            title,
+            JOptionPane.YES_NO_CANCEL_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        
+        if (result == JOptionPane.YES_OPTION) {
+            saveFile();
+            return !isModified; // Возвращаем true если сохранение прошло успешно
+        } else if (result == JOptionPane.NO_OPTION) {
+            return true; // Продолжаем без сохранения
+        } else {
+            return false; // Отменяем операцию
+        }
+    }
+    
+    private void exitApplication() {
+        if (checkUnsavedChanges()) {
+            // Сохраняем настройки
+            saveSettings();
+            
+            // Закрываем приложение
+            dispose();
+            System.exit(0);
+        }
+    }
+    
+    // Вспомогательные методы
+    
+    private JFileChooser createFileChooser() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fileChooser.setAcceptAllFileFilterUsed(true);
+        
+        // Фильтр для текстовых файлов
+        FileNameExtensionFilter textFilter = new FileNameExtensionFilter(
+            "Текстовые файлы (*.txt)", "txt");
+        fileChooser.addChoosableFileFilter(textFilter);
+        
+        // Фильтр для всех поддерживаемых расширений
+        FileNameExtensionFilter allSupportedFilter = new FileNameExtensionFilter(
+            "Все поддерживаемые файлы", SUPPORTED_EXTENSIONS);
+        fileChooser.addChoosableFileFilter(allSupportedFilter);
+        
+        // Устанавливаем фильтр по умолчанию
+        fileChooser.setFileFilter(allSupportedFilter);
+        
+        // Настраиваем внешний вид
+        customizeFileChooser(fileChooser);
+        
+        return fileChooser;
+    }
+    
+    private void customizeFileChooser(JFileChooser fileChooser) {
+        // Можно настроить внешний вид fileChooser здесь
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            SwingUtilities.updateComponentTreeUI(fileChooser);
+        } catch (Exception e) {
+            // Оставляем стандартный вид
+        }
+    }
+    
+    private String detectEncoding(File file) throws IOException {
+        // Простая детекция кодировки
+        byte[] bytes = Files.readAllBytes(file.toPath());
+        
+        // Проверяем BOM для UTF-8
+        if (bytes.length >= 3 && bytes[0] == (byte)0xEF && bytes[1] == (byte)0xBB && bytes[2] == (byte)0xBF) {
+            return "UTF-8";
+        }
+        
+        // По умолчанию используем UTF-8
+        return "UTF-8";
+    }
+    
+    private boolean hasExtension(String fileName) {
+        return fileName.lastIndexOf('.') > 0;
+    }
+    
+    private void textModified() {
+        String currentContent = textArea.getText();
+        isModified = !currentContent.equals(originalContent);
+        updateTitle();
+        updateStatusBar();
+    }
+    
+    private void updateTitle() {
+        String title = APP_NAME;
+        
+        if (currentFile != null) {
+            title = currentFile.getName() + " - " + APP_NAME;
+        }
+        
+        if (isModified) {
+            title = "*" + title;
+        }
+        
+        setTitle(title);
+    }
+    
+    private void updateStatusBar() {
+        String status = "";
+        
+        if (currentFile != null) {
+            status += "Файл: " + currentFile.getName() + " | ";
+            status += "Путь: " + currentFile.getParent() + " | ";
+        }
+        
+        // Информация о тексте
+        int line = 0;
+        int column = 0;
+        int position = textArea.getCaretPosition();
+        
+        try {
+            line = textArea.getLineOfOffset(position);
+            column = position - textArea.getLineStartOffset(line);
+            line++; // Переводим в 1-индексацию для пользователя
+            column++; // Переводим в 1-индексацию для пользователя
+        } catch (Exception e) {
+            // Игнорируем ошибки
+        }
+        
+        String text = textArea.getText();
+        int chars = text.length();
+        int words = text.trim().isEmpty() ? 0 : text.trim().split("\\s+").length;
+        int lines = textArea.getLineCount();
+        
+        status += String.format("Строка: %d, Столбец: %d | ", line, column);
+        status += String.format("Символов: %d, Слов: %d, Строк: %d | ", chars, words, lines);
+        status += String.format("Шрифт: %s %dpt", textArea.getFont().getFamily(), textArea.getFont().getSize());
+        
+        if (isModified) {
+            status += " | ИЗМЕНЕНО";
+        }
+        
+        statusBar.setText(status);
+    }
+    
+    private void updateRecentFilesMenu(JMenu recentMenu) {
+        recentMenu.removeAll();
+        
+        // Здесь можно загружать список недавних файлов из настроек
+        // Пока создаем заглушки
+        if (recentMenu.getItemCount() == 0) {
+            JMenuItem emptyItem = new JMenuItem("Нет недавних файлов");
+            emptyItem.setEnabled(false);
+            recentMenu.add(emptyItem);
+        }
+    }
+    
+    private void addToRecentFiles(File file) {
+        // Здесь можно сохранять файл в список недавних файлов
+        // и обновлять меню
+    }
+    
+    private void toggleTheme(boolean dark) {
+        if (dark) {
+            BACKGROUND_COLOR = new Color(45, 45, 45);
+            TEXT_AREA_COLOR = new Color(60, 63, 65);
+            TEXT_COLOR = new Color(220, 220, 220);
+        } else {
+            BACKGROUND_COLOR = new Color(240, 240, 240);
+            TEXT_AREA_COLOR = Color.WHITE;
+            TEXT_COLOR = Color.BLACK;
+        }
+        
+        getContentPane().setBackground(BACKGROUND_COLOR);
+        textArea.setBackground(TEXT_AREA_COLOR);
+        textArea.setForeground(TEXT_COLOR);
+        textArea.setCaretColor(TEXT_COLOR);
+        updateStatusBar();
+    }
+    
+    private void changeFontSize(int delta) {
+        Font currentFont = textArea.getFont();
+        int newSize = currentFont.getSize() + delta;
+        
+        if (newSize >= 8 && newSize <= 72) {
+            textArea.setFont(new Font(currentFont.getFamily(), currentFont.getStyle(), newSize));
+            updateStatusBar();
+        }
+    }
+    
+    private void resetFontSize() {
+        textArea.setFont(textFont);
+        updateStatusBar();
+    }
+    
+    private void showFindDialog() {
+        String searchText = JOptionPane.showInputDialog(this,
+            "Введите текст для поиска:",
+            "Найти",
+            JOptionPane.PLAIN_MESSAGE);
+        
+        if (searchText != null && !searchText.isEmpty()) {
+            String text = textArea.getText();
+            int index = text.indexOf(searchText, textArea.getCaretPosition());
+            
+            if (index != -1) {
+                textArea.setCaretPosition(index);
+                textArea.select(index, index + searchText.length());
+                textArea.grabFocus();
+            } else {
+                showMessage("Поиск", "Текст не найден.");
+            }
+        }
+    }
+    
+    private void showReplaceDialog() {
+        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
+        JTextField findField = new JTextField(20);
+        JTextField replaceField = new JTextField(20);
+        
+        panel.add(new JLabel("Найти:"));
+        panel.add(findField);
+        panel.add(new JLabel("Заменить на:"));
+        panel.add(replaceField);
+        
+        int result = JOptionPane.showConfirmDialog(this,
+            panel,
+            "Найти и заменить",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE);
+        
+        if (result == JOptionPane.OK_OPTION) {
+            String find = findField.getText();
+            String replace = replaceField.getText();
+            
+            if (!find.isEmpty()) {
+                String text = textArea.getText();
+                String newText = text.replace(find, replace);
+                textArea.setText(newText);
+            }
+        }
+    }
+    
+    private void showAboutDialog() {
+        String aboutText = String.format("""
+            <html>
+            <center><h2>%s v%s</h2></center>
+            <p>Простой, но мощный текстовый редактор с поддержкой:</p>
+            <ul>
+                <li>Открытия и сохранения текстовых файлов</li>
+                <li>Поддержки различных кодировок</li>
+                <li>Работы с большими файлами</li>
+                <li>Переноса по словам</li>
+                <li>Настройки шрифтов и тем</li>
+                <li>Поиска и замены текста</li>
+            </ul>
+            <p>Поддерживаемые форматы: %s</p>
+            <p>Разработчик: Java Swing Text Editor Team</p>
+            <p>© %d Все права защищены</p>
+            </html>
+            """, APP_NAME, APP_VERSION, 
+            String.join(", ", SUPPORTED_EXTENSIONS),
+            LocalDateTime.now().getYear());
+        
+        JOptionPane.showMessageDialog(this,
+            aboutText,
+            "О программе",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void showShortcutsDialog() {
+        String shortcuts = """
+            <html>
+            <h3>Горячие клавиши:</h3>
+            <table border="0" cellpadding="5">
+            <tr><td><b>Ctrl + N</b></td><td>Создать новый файл</td></tr>
+            <tr><td><b>Ctrl + O</b></td><td>Открыть файл</td></tr>
+            <tr><td><b>Ctrl + S</b></td><td>Сохранить файл</td></tr>
+            <tr><td><b>Ctrl + Shift + S</b></td><td>Сохранить как</td></tr>
+            <tr><td><b>Ctrl + Z</b></td><td>Отменить</td></tr>
+            <tr><td><b>Ctrl + Y</b></td><td>Повторить</td></tr>
+            <tr><td><b>Ctrl + X</b></td><td>Вырезать</td></tr>
+            <tr><td><b>Ctrl + C</b></td><td>Копировать</td></tr>
+            <tr><td><b>Ctrl + V</b></td><td>Вставить</td></tr>
+            <tr><td><b>Ctrl + A</b></td><td>Выделить все</td></tr>
+            <tr><td><b>Ctrl + F</b></td><td>Найти</td></tr>
+            <tr><td><b>Ctrl + H</b></td><td>Заменить</td></tr>
+            <tr><td><b>Ctrl + +</b></td><td>Увеличить шрифт</td></tr>
+            <tr><td><b>Ctrl + -</b></td><td>Уменьшить шрифт</td></tr>
+            <tr><td><b>Ctrl + 0</b></td><td>Сбросить масштаб</td></tr>
+            <tr><td><b>Ctrl + Q</b></td><td>Выход</td></tr>
+            <tr><td><b>F1</b></td><td>Справка</td></tr>
+            </table>
+            </html>
+            """;
+        
+        JOptionPane.showMessageDialog(this,
+            shortcuts,
+            "Горячие клавиши",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void showMessage(String title, String message) {
+        JOptionPane.showMessageDialog(this,
+            message,
+            title,
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void showError(String title, String message) {
+        JOptionPane.showMessageDialog(this,
+            message,
+            title,
+            JOptionPane.ERROR_MESSAGE);
