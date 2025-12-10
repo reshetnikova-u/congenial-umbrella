@@ -1,0 +1,58 @@
+class Employee {
+    private int id;
+    private String name;
+    private double salary;
+    private String department;
+    
+    // Конструктор по умолчанию
+    public Employee() {}
+    
+    // Полный конструктор
+    public Employee(int id, String name, double salary, String department) {
+        this.id = id;
+        this.name = name;
+        this.salary = salary;
+        this.department = department;
+    }
+    
+    // Геттеры и сеттеры (стандартный подход)
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    
+    public String getName() { return name; }
+    public void setName(String name) { 
+        if (name != null && !name.trim().isEmpty()) {
+            this.name = name; 
+        }
+    }
+    
+    public double getSalary() { return salary; }
+    public void setSalary(double salary) { 
+        if (salary >= 0) {
+            this.salary = salary; 
+        }
+    }
+    
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { 
+        this.department = department; 
+    }
+    
+    // Метод с бизнес-логикой
+    public void giveBonus(double percentage) {
+        if (percentage > 0 && percentage <= 50) {
+            double bonus = salary * percentage / 100;
+            salary += bonus;
+            System.out.println("Бонус " + percentage + "% начислен: +" + bonus + " руб.");
+        }
+    }
+    
+    // Приватный метод для внутренних расчетов
+    private double calculateTax() {
+        return salary * 0.13; // 13% налог
+    }
+    
+    public double getNetSalary() {
+        return salary - calculateTax(); // Используем приватный метод
+    }
+}
