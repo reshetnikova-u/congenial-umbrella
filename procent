@@ -1,0 +1,384 @@
+import java.util.Scanner;
+import java.util.InputMismatchException;
+
+public class CompoundInterestCalculator {
+    
+    // Основная формула сложного процента: A = P(1 + r/n)^(nt)
+    // Где: A - итоговая сумма
+    //       P - начальная сумма (principal)
+    //       r - годовая процентная ставка (в десятичной форме)
+    //       n - количество начислений процентов в год
+    //       t - количество лет
+    
+    /**
+     * Вычисляет итоговую сумму по сложному проценту
+     * @param principal начальная сумма
+     * @param annualRate годовая процентная ставка (в процентах)
+     * @param compoundingFrequency количество начислений в год
+     * @param years количество лет
+     * @return итоговая сумма
+     */
+    public static double calculateFutureValue(double principal, double annualRate, 
+                                            int compoundingFrequency, int years) {
+        double rateDecimal = annualRate / 100.0; // Преобразуем проценты в десятичную форму
+        // Формула сложного процента
+        return principal * Math.pow(1 + rateDecimal / compoundingFrequency, 
+                                   compoundingFrequency * years);
+    }
+    
+    /**
+     * Вычисляет сложный процент для стандартных условий (ежегодное начисление)
+     * @param principal начальная сумма
+     * @param annualRate годовая процентная ставка (в процентах)
+     * @param years количество лет
+     * @return итоговая сумма
+     */
+    public static double calculateSimpleCompound(double principal, double annualRate, int years) {
+        double rateDecimal = annualRate / 100.0;
+        return principal * Math.pow(1 + rateDecimal, years);
+    }
+    
+    /**
+     * Вычисляет необходимую процентную ставку для достижения целевой суммы
+     * @param principal начальная сумма
+     * @param targetValue целевая сумма
+     * @param years количество лет
+     * @param compoundingFrequency количество начислений в год
+     * @return необходимая годовая процентная ставка (в процентах)
+     */
+    public static double calculateRequiredRate(double principal, double targetValue,
+                                             int years, int compoundingFrequency) {
+        // Из формулы A = P(1 + r/n)^(nt) выражаем r:
+        // r = n * ((A/P)^(1/(n*t)) - 1)
+        double ratio = targetValue / principal;
+        double exponent = 1.0 / (compoundingFrequency * years);
+        double rateDecimal = compoundingFrequency * (Math.pow(ratio, exponent) - 1);
+        return rateDecimal * 100; // Возвращаем в процентах
+    }
+    
+    /**
+     * Вычисляет необходимое количество периодов для достижения целевой суммы
+     * @param principal начальная сумма
+     * @param targetValue целевая сумма
+     * @param annualRate годовая процентная ставка (в процентах)
+     * @param compoundingFrequency количество начислений в год
+     * @return необходимое количество лет (может быть дробным)
+     */
+    public static double calculateRequiredYears(double principal, double targetValue,
+                                              double annualRate, int compoundingFrequency) {
+        double rateDecimal = annualRate / 100.0;
+        // Из формулы A = P(1 + r/n)^(nt) выражаем t:
+        // t = log(A/P) / (n * log(1 + r/n))
+        double ratio = targetValue / principal;
+        double numerator = Math.log(ratio);
+        double denominator = compoundingFrequency * Math.log(1 + rateDecimal / compoundingFrequency);
+        return numerator / denominator;
+    }
+    
+    /**
+     * Форматирует число для красивого вывода
+     */
+    public static String formatCurrency(double amount) {
+        return String.format("%,.2f", amount);
+    }
+    
+    /**
+     * Форматирует процент для вывода
+     */
+    public static String formatPercentage(double rate) {
+        return String.format("%.3f%%", rate);
+    }
+    
+    /**
+     * Проверяет корректность ввода
+     */
+    private static double getValidDoubleInput(Scanner scanner, String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            try {
+                double value = scanner.nextDouble();
+                if (value <= 0) {
+                    System.out.println("Ошибка: значение должно быть положительным.");
+                } else {
+                    return value;
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("Ошибка: введите корректное число.");
+                scanner.next(); // Очищаем некорректный ввод
+            }
+        }
+    }
+    
+    /**
+     * Проверяет корректность ввода целого числа
+     */
+    private static int getValidIntInput(Scanner scanner, String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            try {
+                int value = scanner.nextInt();
+                if (value <= 0) {
+                    System.out.println("Ошибка: значение должно быть положительным.");
+                } else {
+                    return value;
+                }
+            } catch (InputMismatchException e) {
+                System.out.println("Ошибка: введите целое число.");
+                scanner.next(); // Очищаем некорректный ввод
+            }
+        }
+    }
+    
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        
+        System.out.println("══════════════════════════════════════════════════════════");
+        System.out.println("         КАЛЬКУЛЯТОР СЛОЖНОГО ПРОЦЕНТА                     ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        System.out.println("1. Рассчитать будущую стоимость");
+        System.out.println("2. Рассчитать необходимую процентную ставку");
+        System.out.println("3. Рассчитать необходимое время");
+        System.out.println("4. Вывести таблицу роста");
+        System.out.println("5. Сравнить разные варианты");
+        System.out.println("0. Выход");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        while (true) {
+            System.out.print("\nВыберите операцию (0-5): ");
+            
+            if (!scanner.hasNextInt()) {
+                System.out.println("Ошибка: введите число от 0 до 5.");
+                scanner.next();
+                continue;
+            }
+            
+            int choice = scanner.nextInt();
+            scanner.nextLine(); // Очищаем буфер
+            
+            if (choice == 0) {
+                System.out.println("Выход из программы.");
+                break;
+            }
+            
+            switch (choice) {
+                case 1 -> calculateFutureValueMenu(scanner);
+                case 2 -> calculateRequiredRateMenu(scanner);
+                case 3 -> calculateRequiredTimeMenu(scanner);
+                case 4 -> printGrowthTable(scanner);
+                case 5 -> compareOptions(scanner);
+                default -> System.out.println("Неверный выбор. Попробуйте снова.");
+            }
+        }
+        
+        scanner.close();
+    }
+    
+    /**
+     * Меню расчета будущей стоимости
+     */
+    private static void calculateFutureValueMenu(Scanner scanner) {
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("       РАСЧЕТ БУДУЩЕЙ СТОИМОСТИ                             ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        double principal = getValidDoubleInput(scanner, "Начальная сумма: ");
+        double annualRate = getValidDoubleInput(scanner, "Годовая процентная ставка (%): ");
+        int years = getValidIntInput(scanner, "Количество лет: ");
+        
+        System.out.println("Выберите частоту начисления процентов:");
+        System.out.println("1. Ежегодно");
+        System.out.println("2. Ежеквартально (4 раза в год)");
+        System.out.println("3. Ежемесячно (12 раз в год)");
+        System.out.println("4. Ежедневно (365 раз в год)");
+        System.out.print("Ваш выбор (1-4): ");
+        
+        int freqChoice = scanner.nextInt();
+        int compoundingFrequency = switch (freqChoice) {
+            case 1 -> 1;    // Ежегодно
+            case 2 -> 4;    // Ежеквартально
+            case 3 -> 12;   // Ежемесячно
+            case 4 -> 365;  // Ежедневно
+            default -> {
+                System.out.println("Неверный выбор. Используется ежегодное начисление.");
+                yield 1;
+            }
+        };
+        
+        double futureValue = calculateFutureValue(principal, annualRate, compoundingFrequency, years);
+        double simpleFutureValue = calculateSimpleCompound(principal, annualRate, years);
+        
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("                   РЕЗУЛЬТАТЫ                               ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        System.out.printf("Начальная сумма: %s ₽%n", formatCurrency(principal));
+        System.out.printf("Годовая ставка: %s%n", formatPercentage(annualRate));
+        System.out.printf("Срок: %d лет%n", years);
+        System.out.printf("Начисление: %d раз в год%n", compoundingFrequency);
+        System.out.println("──────────────────────────────────────────────────────────");
+        System.out.printf("Итоговая сумма: %s ₽%n", formatCurrency(futureValue));
+        System.out.printf("Прибыль: %s ₽%n", formatCurrency(futureValue - principal));
+        System.out.printf("Доходность: %s%n", formatPercentage((futureValue/principal - 1) * 100));
+        
+        if (compoundingFrequency > 1) {
+            System.out.println("\nДля сравнения (при ежегодном начислении):");
+            System.out.printf("Итоговая сумма: %s ₽%n", formatCurrency(simpleFutureValue));
+            System.out.printf("Разница: %s ₽%n", formatCurrency(futureValue - simpleFutureValue));
+        }
+    }
+    
+    /**
+     * Меню расчета необходимой процентной ставки
+     */
+    private static void calculateRequiredRateMenu(Scanner scanner) {
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("    РАСЧЕТ НЕОБХОДИМОЙ ПРОЦЕНТНОЙ СТАВКИ                    ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        double principal = getValidDoubleInput(scanner, "Начальная сумма: ");
+        double targetValue = getValidDoubleInput(scanner, "Целевая сумма: ");
+        int years = getValidIntInput(scanner, "Количество лет: ");
+        
+        System.out.print("Частота начисления процентов в год (обычно 1, 4, 12 или 365): ");
+        int compoundingFrequency = scanner.nextInt();
+        
+        double requiredRate = calculateRequiredRate(principal, targetValue, years, compoundingFrequency);
+        
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("                   РЕЗУЛЬТАТЫ                               ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        System.out.printf("Начальная сумма: %s ₽%n", formatCurrency(principal));
+        System.out.printf("Целевая сумма: %s ₽%n", formatCurrency(targetValue));
+        System.out.printf("Срок: %d лет%n", years);
+        System.out.printf("Частота начисления: %d раз в год%n", compoundingFrequency);
+        System.out.println("──────────────────────────────────────────────────────────");
+        System.out.printf("Необходимая годовая ставка: %s%n", formatPercentage(requiredRate));
+        
+        // Проверка расчета
+        double calculatedValue = calculateFutureValue(principal, requiredRate, 
+                                                    compoundingFrequency, years);
+        System.out.printf("Проверка: при ставке %s получим %s ₽%n", 
+                         formatPercentage(requiredRate), formatCurrency(calculatedValue));
+    }
+    
+    /**
+     * Меню расчета необходимого времени
+     */
+    private static void calculateRequiredTimeMenu(Scanner scanner) {
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("       РАСЧЕТ НЕОБХОДИМОГО ВРЕМЕНИ                          ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        double principal = getValidDoubleInput(scanner, "Начальная сумма: ");
+        double targetValue = getValidDoubleInput(scanner, "Целевая сумма: ");
+        double annualRate = getValidDoubleInput(scanner, "Годовая процентная ставка (%): ");
+        
+        System.out.print("Частота начисления процентов в год (обычно 1, 4, 12 или 365): ");
+        int compoundingFrequency = scanner.nextInt();
+        
+        double requiredYears = calculateRequiredYears(principal, targetValue, annualRate, compoundingFrequency);
+        
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("                   РЕЗУЛЬТАТЫ                               ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        System.out.printf("Начальная сумма: %s ₽%n", formatCurrency(principal));
+        System.out.printf("Целевая сумма: %s ₽%n", formatCurrency(targetValue));
+        System.out.printf("Годовая ставка: %s%n", formatPercentage(annualRate));
+        System.out.printf("Частота начисления: %d раз в год%n", compoundingFrequency);
+        System.out.println("──────────────────────────────────────────────────────────");
+        
+        if (requiredYears > 0) {
+            int wholeYears = (int) requiredYears;
+            int months = (int) ((requiredYears - wholeYears) * 12);
+            int days = (int) ((requiredYears - wholeYears) * 365);
+            
+            System.out.printf("Необходимое время: %.2f лет%n", requiredYears);
+            System.out.printf("Или: %d лет %d месяцев%n", wholeYears, months);
+            System.out.printf("Или: %d дней%n", days);
+            
+            // Проверка расчета
+            double calculatedValue = calculateFutureValue(principal, annualRate, 
+                                                        compoundingFrequency, (int) Math.ceil(requiredYears));
+            System.out.printf("\nПроверка (через %d лет): %s ₽%n", 
+                             (int) Math.ceil(requiredYears), formatCurrency(calculatedValue));
+        } else {
+            System.out.println("Целевая сумма меньше начальной при данной ставке.");
+        }
+    }
+    
+    /**
+     * Вывод таблицы роста по годам
+     */
+    private static void printGrowthTable(Scanner scanner) {
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("           ТАБЛИЦА РОСТА ИНВЕСТИЦИЙ                         ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        double principal = getValidDoubleInput(scanner, "Начальная сумма: ");
+        double annualRate = getValidDoubleInput(scanner, "Годовая процентная ставка (%): ");
+        int years = getValidIntInput(scanner, "Количество лет для таблицы: ");
+        int compoundingFrequency = 1; // Для таблицы используем ежегодное начисление
+        
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("Год | Начало года   | Проценты за год | Конец года       ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        double currentAmount = principal;
+        
+        for (int year = 1; year <= years; year++) {
+            double startAmount = currentAmount;
+            double interest = startAmount * (annualRate / 100.0);
+            currentAmount = startAmount + interest;
+            
+            System.out.printf("%3d | %13s | %15s | %15s%n",
+                            year,
+                            formatCurrency(startAmount),
+                            formatCurrency(interest),
+                            formatCurrency(currentAmount));
+        }
+        
+        System.out.println("══════════════════════════════════════════════════════════");
+        System.out.printf("Итог за %d лет: %s ₽ (прибыль: %s ₽)%n",
+                         years, formatCurrency(currentAmount), 
+                         formatCurrency(currentAmount - principal));
+    }
+    
+    /**
+     * Сравнение разных вариантов инвестирования
+     */
+    private static void compareOptions(Scanner scanner) {
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("     СРАВНЕНИЕ РАЗНЫХ ВАРИАНТОВ ИНВЕСТИЦИЙ                  ");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        double principal = getValidDoubleInput(scanner, "Начальная сумма: ");
+        int years = getValidIntInput(scanner, "Срок инвестирования (лет): ");
+        
+        System.out.println("\nВведите данные для 3 вариантов инвестирования:");
+        
+        double[][] options = new double[3][2]; // [ставка][частота начисления]
+        
+        for (int i = 0; i < 3; i++) {
+            System.out.printf("\nВариант %d:%n", i + 1);
+            options[i][0] = getValidDoubleInput(scanner, "  Годовая ставка (%): ");
+            System.out.print("  Частота начисления (1-год, 4-квартал, 12-месяц, 365-день): ");
+            options[i][1] = scanner.nextInt();
+        }
+        
+        System.out.println("\n══════════════════════════════════════════════════════════");
+        System.out.println("Результаты сравнения:");
+        System.out.println("══════════════════════════════════════════════════════════");
+        
+        for (int i = 0; i < 3; i++) {
+            double rate = options[i][0];
+            int frequency = (int) options[i][1];
+            double futureValue = calculateFutureValue(principal, rate, frequency, years);
+            double profit = futureValue - principal;
+            double roi = (profit / principal) * 100;
+            
+            System.out.printf("\nВариант %d (%.2f%%, %d раз в год):%n", i + 1, rate, frequency);
+            System.out.printf("  Итоговая сумма: %s ₽%n", formatCurrency(futureValue));
+            System.out.printf("  Прибыль: %s ₽%n", formatCurrency(profit));
+            System.out.printf("  Доходность: %.2f%%%n", roi);
+        }
+    }
+}
