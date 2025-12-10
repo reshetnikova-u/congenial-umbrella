@@ -1,0 +1,97 @@
+import java.util.Scanner;
+
+interface Operation {
+    double execute(double a, double b);
+}
+
+class Addition implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        return a + b;
+    }
+}
+
+class Subtraction implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        return a - b;
+    }
+}
+
+class Multiplication implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        return a * b;
+    }
+}
+
+class Division implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        if (b == 0) throw new ArithmeticException("Деление на ноль");
+        return a / b;
+    }
+}
+
+class Calculator {
+    private static final java.util.Map<String, Operation> operations = new java.util.HashMap<>();
+    
+    static {
+        operations.put("+", new Addition());
+        operations.put("-", new Subtraction());
+        operations.put("*", new Multiplication());
+        operations.put("/", new Division());
+    }
+    
+    public static double calculate(String expression) {
+        expression = expression.trim().replaceAll("\\s+", " ");
+        String[] parts = expression.split(" ");
+        
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("Неверный формат. Ожидается: число оператор число");
+        }
+        
+        try {
+            double num1 = Double.parseDouble(parts[0]);
+            String operator = parts[1];
+            double num2 = Double.parseDouble(parts[2]);
+            
+            Operation operation = operations.get(operator);
+            if (operation == null) {
+                throw new IllegalArgumentException("Неподдерживаемая операция: " + operator);
+            }
+            
+            return operation.execute(num1, num2);
+            
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Неверный формат чисел");
+        }
+    }
+}
+
+public class OOPCalculator {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        
+        System.out.println("Калькулятор (ООП версия)");
+        System.out.println("Примеры: 2 * 6.5, 10 + 5, 20 / 4");
+        
+        while (true) {
+            System.out.print("\nВведите выражение (или 'выход'): ");
+            String input = scanner.nextLine().trim();
+            
+            if (input.equalsIgnoreCase("выход") || input.equalsIgnoreCase("exit")) {
+                break;
+            }
+            
+            try {
+                double result = Calculator.calculate(input);
+                System.out.println("= " + result);
+            } catch (Exception e) {
+                System.out.println("Ошибка: " + e.getMessage());
+            }
+        }
+        
+        scanner.close();
+    }
+}
