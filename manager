@@ -1,0 +1,362 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+
+public class LayoutManagerDemo extends JFrame {
+    
+    public LayoutManagerDemo() {
+        super("Демонстрация менеджеров компоновки");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(800, 600);
+        setLocationRelativeTo(null);
+        
+        // 1. Устанавливаем BorderLayout для главного окна (JFrame)
+        setLayout(new BorderLayout(10, 10)); // Горизонтальный и вертикальный отступы 10px
+        
+        // 2. Создаем панель с FlowLayout для размещения кнопок
+        JPanel flowLayoutPanel = createFlowLayoutPanel();
+        
+        // 3. Создаем панель с GridLayout для демонстрации
+        JPanel gridLayoutPanel = createGridLayoutPanel();
+        
+        // 4. Создаем панель с BoxLayout для демонстрации
+        JPanel boxLayoutPanel = createBoxLayoutPanel();
+        
+        // 5. Создаем панель с CardLayout для демонстрации
+        JPanel cardLayoutPanel = createCardLayoutPanel();
+        
+        // 6. Создаем информационную панель
+        JPanel infoPanel = createInfoPanel();
+        
+        // 7. Добавляем все панели в главное окно с использованием BorderLayout
+        add(flowLayoutPanel, BorderLayout.NORTH);
+        add(gridLayoutPanel, BorderLayout.WEST);
+        add(boxLayoutPanel, BorderLayout.EAST);
+        add(cardLayoutPanel, BorderLayout.CENTER);
+        add(infoPanel, BorderLayout.SOUTH);
+        
+        setVisible(true);
+    }
+    
+    private JPanel createFlowLayoutPanel() {
+        JPanel panel = new JPanel();
+        
+        // Устанавливаем FlowLayout с выравниванием по центру и отступами
+        panel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
+        panel.setBorder(BorderFactory.createTitledBorder("FlowLayout - менеджер потока"));
+        panel.setBackground(new Color(240, 248, 255)); // AliceBlue
+        
+        // Создаем кнопки для FlowLayout
+        String[] buttonLabels = {"Кнопка 1", "Кнопка 2", "Длинная кнопка 3", 
+                                "Кнопка 4", "Ещё кнопка", "Кнопка 6"};
+        
+        for (String label : buttonLabels) {
+            JButton button = new JButton(label);
+            button.setFont(new Font("Arial", Font.PLAIN, 12));
+            button.setBackground(new Color(135, 206, 250)); // LightSkyBlue
+            button.setForeground(Color.BLACK);
+            
+            // Добавляем обработчик для изменения размера кнопки
+            button.addActionListener(e -> {
+                JButton btn = (JButton) e.getSource();
+                Dimension size = btn.getSize();
+                btn.setText(btn.getText() + " (" + size.width + "x" + size.height + ")");
+                btn.setPreferredSize(new Dimension(size.width + 20, size.height));
+                panel.revalidate(); // Перерисовываем компоновку
+            });
+            
+            panel.add(button);
+        }
+        
+        // Добавляем кнопку для изменения выравнивания
+        JButton changeAlignmentBtn = new JButton("Сменить выравнивание");
+        changeAlignmentBtn.addActionListener(e -> {
+            FlowLayout layout = (FlowLayout) panel.getLayout();
+            int newAlignment = (layout.getAlignment() + 1) % 3; // 0=LEFT, 1=CENTER, 2=RIGHT
+            layout.setAlignment(newAlignment);
+            String[] alignNames = {"LEFT", "CENTER", "RIGHT"};
+            panel.setBorder(BorderFactory.createTitledBorder(
+                "FlowLayout - выравнивание: " + alignNames[newAlignment]));
+            panel.revalidate();
+        });
+        panel.add(changeAlignmentBtn);
+        
+        return panel;
+    }
+    
+    private JPanel createGridLayoutPanel() {
+        JPanel panel = new JPanel();
+        
+        // Устанавливаем GridLayout 3x3 с отступами 5px
+        panel.setLayout(new GridLayout(3, 3, 5, 5));
+        panel.setBorder(BorderFactory.createTitledBorder("GridLayout - сетка 3x3"));
+        panel.setBackground(new Color(255, 240, 245)); // LavenderBlush
+        
+        // Создаем 9 кнопок для GridLayout
+        for (int i = 1; i <= 9; i++) {
+            JButton button = new JButton(String.valueOf(i));
+            button.setFont(new Font("Arial", Font.BOLD, 14));
+            
+            // Разные цвета для кнопок
+            Color[] colors = {
+                new Color(255, 182, 193), // LightPink
+                new Color(255, 160, 122), // LightSalmon
+                new Color(255, 228, 181), // Moccasin
+                new Color(240, 230, 140), // Khaki
+                new Color(152, 251, 152), // PaleGreen
+                new Color(175, 238, 238), // PaleTurquoise
+                new Color(221, 160, 221), // Plum
+                new Color(255, 218, 185), // PeachPuff
+                new Color(230, 230, 250)  // Lavender
+            };
+            button.setBackground(colors[i-1]);
+            
+            button.addActionListener(e -> {
+                JButton btn = (JButton) e.getSource();
+                String text = btn.getText();
+                if (text.matches("\\d+")) {
+                    btn.setText("Нажата");
+                    Timer timer = new Timer(1000, ev -> {
+                        btn.setText(text);
+                    });
+                    timer.setRepeats(false);
+                    timer.start();
+                }
+            });
+            
+            panel.add(button);
+        }
+        
+        return panel;
+    }
+    
+    private JPanel createBoxLayoutPanel() {
+        JPanel panel = new JPanel();
+        
+        // Устанавливаем BoxLayout с вертикальной ориентацией
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createTitledBorder("BoxLayout - вертикальная коробка"));
+        panel.setBackground(new Color(240, 255, 240)); // Honeydew
+        
+        // Добавляем компоненты с разными размерами
+        JLabel titleLabel = new JLabel("Вертикальное выравнивание");
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(titleLabel);
+        
+        panel.add(Box.createRigidArea(new Dimension(0, 10))); // Отступ
+        
+        // Кнопки разной ширины
+        String[] buttonTexts = {"Короткая", "Средняя кнопка", "Очень длинная кнопка с текстом"};
+        
+        for (String text : buttonTexts) {
+            JButton button = new JButton(text);
+            button.setAlignmentX(Component.CENTER_ALIGNMENT);
+            button.setMaximumSize(new Dimension(200, 30)); // Ограничиваем максимальную ширину
+            button.setBackground(new Color(144, 238, 144)); // LightGreen
+            
+            button.addActionListener(e -> {
+                JButton btn = (JButton) e.getSource();
+                btn.setAlignmentX(btn.getAlignmentX() == Component.LEFT_ALIGNMENT ? 
+                    Component.CENTER_ALIGNMENT : Component.LEFT_ALIGNMENT);
+                panel.revalidate();
+            });
+            
+            panel.add(button);
+            panel.add(Box.createRigidArea(new Dimension(0, 5))); // Отступ между кнопками
+        }
+        
+        // Добавляем растягивающийся компонент
+        panel.add(Box.createVerticalGlue());
+        
+        // Кнопка внизу
+        JButton bottomButton = new JButton("Нижняя кнопка");
+        bottomButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        bottomButton.setBackground(new Color(32, 178, 170)); // LightSeaGreen
+        panel.add(bottomButton);
+        
+        return panel;
+    }
+    
+    private JPanel createCardLayoutPanel() {
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBorder(BorderFactory.createTitledBorder("CardLayout - переключение карточек"));
+        mainPanel.setBackground(new Color(255, 250, 240)); // FloralWhite
+        
+        // Создаем панель с CardLayout
+        JPanel cardPanel = new JPanel();
+        CardLayout cardLayout = new CardLayout();
+        cardPanel.setLayout(cardLayout);
+        
+        // Создаем несколько "карточек" с разным содержимым
+        Color[] cardColors = {
+            new Color(255, 228, 225), // MistyRose
+            new Color(224, 255, 255), // LightCyan
+            new Color(255, 245, 238), // Seashell
+            new Color(245, 255, 250), // MintCream
+            new Color(248, 248, 255)  // GhostWhite
+        };
+        
+        String[] cardTitles = {"Карточка 1", "Карточка 2", "Карточка 3", "Карточка 4", "Карточка 5"};
+        
+        for (int i = 0; i < 5; i++) {
+            JPanel card = new JPanel();
+            card.setLayout(new BorderLayout());
+            card.setBackground(cardColors[i]);
+            
+            JLabel label = new JLabel(cardTitles[i], SwingConstants.CENTER);
+            label.setFont(new Font("Arial", Font.BOLD, 16));
+            label.setBorder(BorderFactory.createEmptyBorder(50, 0, 0, 0));
+            card.add(label, BorderLayout.NORTH);
+            
+            JTextArea textArea = new JTextArea();
+            textArea.setText("Это содержимое " + (i+1) + "-й карточки.\n" +
+                           "CardLayout позволяет переключаться между разными панелями,\n" +
+                           "как страницы в книге или слайды в презентации.");
+            textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+            textArea.setBackground(cardColors[i]);
+            textArea.setEditable(false);
+            textArea.setLineWrap(true);
+            textArea.setWrapStyleWord(true);
+            card.add(new JScrollPane(textArea), BorderLayout.CENTER);
+            
+            cardPanel.add(card, "card" + i);
+        }
+        
+        // Создаем панель управления для CardLayout
+        JPanel controlPanel = new JPanel(new FlowLayout());
+        controlPanel.setBackground(new Color(245, 245, 245));
+        
+        JButton prevButton = new JButton("← Предыдущая");
+        JButton nextButton = new JButton("Следующая →");
+        JLabel currentCardLabel = new JLabel("Карточка 1");
+        
+        prevButton.addActionListener(e -> {
+            cardLayout.previous(cardPanel);
+            updateCardLabel(cardLayout, cardPanel, currentCardLabel);
+        });
+        
+        nextButton.addActionListener(e -> {
+            cardLayout.next(cardPanel);
+            updateCardLabel(cardLayout, cardPanel, currentCardLabel);
+        });
+        
+        // Кнопки для перехода к конкретной карточке
+        for (int i = 0; i < 5; i++) {
+            final int cardIndex = i;
+            JButton cardButton = new JButton(String.valueOf(i+1));
+            cardButton.addActionListener(e -> {
+                cardLayout.show(cardPanel, "card" + cardIndex);
+                currentCardLabel.setText("Карточка " + (cardIndex+1));
+            });
+            controlPanel.add(cardButton);
+        }
+        
+        controlPanel.add(prevButton);
+        controlPanel.add(currentCardLabel);
+        controlPanel.add(nextButton);
+        
+        mainPanel.add(cardPanel, BorderLayout.CENTER);
+        mainPanel.add(controlPanel, BorderLayout.SOUTH);
+        
+        return mainPanel;
+    }
+    
+    private void updateCardLabel(CardLayout layout, JPanel cardPanel, JLabel label) {
+        // Получаем текущую видимую карточку
+        for (int i = 0; i < cardPanel.getComponentCount(); i++) {
+            Component comp = cardPanel.getComponent(i);
+            if (comp.isVisible()) {
+                label.setText("Карточка " + (i+1));
+                break;
+            }
+        }
+    }
+    
+    private JPanel createInfoPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEtchedBorder());
+        panel.setBackground(new Color(255, 250, 205)); // LemonChiffon
+        
+        // Левая часть - описание менеджеров компоновки
+        JTextArea infoText = new JTextArea();
+        infoText.setText("""
+            ДЕМОНСТРАЦИЯ МЕНЕДЖЕРОВ КОМПОНОВКИ SWING:
+            
+            BorderLayout (главное окно): Размещает компоненты в 5 областях:
+              NORTH - сверху, SOUTH - снизу, EAST - справа,
+              WEST - слева, CENTER - по центру.
+            
+            FlowLayout (верхняя панель): Размещает компоненты в строку слева направо.
+              При изменении размера окна компоненты автоматически переносятся.
+            
+            GridLayout (левая панель): Размещает компоненты в виде сетки фиксированного размера.
+              Все ячейки имеют одинаковый размер.
+            
+            BoxLayout (правая панель): Размещает компоненты в линию по горизонтали или вертикали.
+              Позволяет использовать клеи (glue) и распорки (rigid areas).
+            
+            CardLayout (центральная панель): Позволяет переключаться между разными панелями,
+              как страницы в книге. Отображает только одну панель за раз.
+            """);
+        infoText.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        infoText.setEditable(false);
+        infoText.setBackground(new Color(255, 250, 205));
+        
+        // Правая часть - управляющие кнопки
+        JPanel buttonPanel = new JPanel(new GridLayout(3, 1, 5, 5));
+        
+        JButton resizeButton = new JButton("Изменить размер окна");
+        resizeButton.addActionListener(e -> {
+            Dimension size = getSize();
+            if (size.width == 800) {
+                setSize(600, 400);
+            } else {
+                setSize(800, 600);
+            }
+            revalidate();
+        });
+        
+        JButton toggleButton = new JButton("Показать/скрыть сетку");
+        toggleButton.addActionListener(e -> {
+            Component[] components = getContentPane().getComponents();
+            for (Component comp : components) {
+                if (comp instanceof JPanel) {
+                    ((JPanel) comp).setBorder(
+                        ((JPanel) comp).getBorder() == null ?
+                        BorderFactory.createLineBorder(Color.RED, 2) : null
+                    );
+                }
+            }
+        });
+        
+        JButton refreshButton = new JButton("Обновить компоновку");
+        refreshButton.addActionListener(e -> {
+            revalidate();
+            repaint();
+        });
+        
+        buttonPanel.add(resizeButton);
+        buttonPanel.add(toggleButton);
+        buttonPanel.add(refreshButton);
+        
+        panel.add(new JScrollPane(infoText), BorderLayout.CENTER);
+        panel.add(buttonPanel, BorderLayout.EAST);
+        
+        return panel;
+    }
+    
+    public static void main(String[] args) {
+        // Устанавливаем Look and Feel для лучшего внешнего вида
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        // Запускаем приложение в Event Dispatch Thread
+        SwingUtilities.invokeLater(() -> {
+            new LayoutManagerDemo();
+        });
+    }
+}
