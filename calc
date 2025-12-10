@@ -1,0 +1,189 @@
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.awt.datatransfer.StringSelection;
+import java.awt.event.*;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+public class AdvancedCalculator extends Calculator {
+    
+    private List<String> calculationHistory;
+    private JFrame historyFrame;
+    private DefaultTableModel historyTableModel;
+    
+    public AdvancedCalculator() {
+        super();
+        calculationHistory = new ArrayList<>();
+        addHistoryFeature();
+    }
+    
+    private void addHistoryFeature() {
+        // Добавление кнопки истории в меню
+        JMenuBar menuBar = getJMenuBar();
+        if (menuBar != null) {
+            JMenu extrasMenu = new JMenu("Дополнительно");
+            JMenuItem historyItem = new JMenuItem("История вычислений");
+            historyItem.addActionListener(e -> showHistory());
+            
+            JMenuItem exportItem = new JMenuItem("Экспорт истории");
+            exportItem.addActionListener(e -> exportHistory());
+            
+            extrasMenu.add(historyItem);
+            extrasMenu.add(exportItem);
+            menuBar.add(extrasMenu);
+        }
+    }
+    
+    @Override
+    protected void calculate() {
+        String expression = firstNumber + " " + operator + " " + 
+                           displayField.getText() + " = ";
+        
+        super.calculate();
+        
+        // Добавление в историю после вычисления
+        if (!displayField.getText().startsWith("Ошибка")) {
+            expression += displayField.getText();
+            
+            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
+            String timestamp = sdf.format(new Date());
+            
+            calculationHistory.add(timestamp + " | " + expression);
+            
+            // Ограничение истории 50 записями
+            if (calculationHistory.size() > 50) {
+                calculationHistory.remove(0);
+            }
+        }
+    }
+    
+    private void showHistory() {
+        if (historyFrame == null) {
+            createHistoryWindow();
+        }
+        
+        historyFrame.setVisible(true);
+        updateHistoryTable();
+    }
+    
+    private void createHistoryWindow() {
+        historyFrame = new JFrame("История вычислений");
+        historyFrame.setSize(500, 400);
+        historyFrame.setLocationRelativeTo(this);
+        
+        // Создание таблицы для истории
+        String[] columns = {"Время", "Выражение", "Результат"};
+        historyTableModel = new DefaultTableModel(columns, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        
+        JTable historyTable = new JTable(historyTableModel);
+        historyTable.getColumnModel().getColumn(0).setPreferredWidth(80);
+        historyTable.getColumnModel().getColumn(1).setPreferredWidth(250);
+        historyTable.getColumnModel().getColumn(2).setPreferredWidth(100);
+        
+        JScrollPane scrollPane = new JScrollPane(historyTable);
+        
+        // Панель кнопок
+        JPanel buttonPanel = new JPanel();
+        JButton clearHistoryBtn = new JButton("Очистить историю");
+        JButton copyBtn = new JButton("Копировать");
+        JButton closeBtn = new JButton("Закрыть");
+        
+        clearHistoryBtn.addActionListener(e -> {
+            calculationHistory.clear();
+            updateHistoryTable();
+        });
+        
+        copyBtn.addActionListener(e -> {
+            int selectedRow = historyTable.getSelectedRow();
+            if (selectedRow != -1) {
+                String result = (String) historyTable.getValueAt(selectedRow, 2);
+                StringSelection selection = new StringSelection(result);
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
+                JOptionPane.showMessageDialog(historyFrame, "Результат скопирован");
+            }
+        });
+        
+        closeBtn.addActionListener(e -> historyFrame.setVisible(false));
+        
+        buttonPanel.add(clearHistoryBtn);
+        buttonPanel.add(copyBtn);
+        buttonPanel.add(closeBtn);
+        
+        // Добавление компонентов
+        historyFrame.setLayout(new BorderLayout());
+        historyFrame.add(scrollPane, BorderLayout.CENTER);
+        historyFrame.add(buttonPanel, BorderLayout.SOUTH);
+        
+        // Обработка закрытия окна
+        historyFrame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                historyFrame.setVisible(false);
+            }
+        });
+    }
+    
+    private void updateHistoryTable() {
+        historyTableModel.setRowCount(0);
+        
+        for (String entry : calculationHistory) {
+            String[] parts = entry.split(" \\| ");
+            if (parts.length == 2) {
+                String[] expressionParts = parts[1].split(" = ");
+                if (expressionParts.length == 2) {
+                    historyTableModel.addRow(new Object[]{
+                        parts[0], expressionParts[0], expressionParts[1]
+                    });
+                }
+            }
+        }
+    }
+    
+    private void exportHistory() {
+        if (calculationHistory.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "История пуста", 
+                                        "Экспорт", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Сохранить историю");
+        
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                java.io.File file = fileChooser.getSelectedFile();
+                java.io.PrintWriter writer = new java.io.PrintWriter(file);
+                
+                writer.println("История вычислений калькулятора");
+                writer.println("================================\n");
+                
+                for (String entry : calculationHistory) {
+                    writer.println(entry);
+                }
+                
+                writer.close();
+                JOptionPane.showMessageDialog(this, "История экспортирована успешно",
+                                            "Экспорт", JOptionPane.INFORMATION_MESSAGE);
+                
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Ошибка при экспорте: " + e.getMessage(),
+                                            "Ошибка", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            AdvancedCalculator calculator = new AdvancedCalculator();
+            calculator.setTitle("Расширенный калькулятор");
+        });
+    }
+}
