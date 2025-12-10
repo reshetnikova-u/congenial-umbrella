@@ -1,0 +1,90 @@
+// Базовый класс
+abstract class Shape {
+    abstract double calculateArea(); // Абстрактный метод
+}
+
+// Производные классы
+class Circle extends Shape {
+    private double radius;
+    
+    public Circle(double radius) {
+        this.radius = radius;
+    }
+    
+    @Override
+    double calculateArea() {
+        return Math.PI * radius * radius;
+    }
+}
+
+class Rectangle extends Shape {
+    private double width;
+    private double height;
+    
+    public Rectangle(double width, double height) {
+        this.width = width;
+        this.height = height;
+    }
+    
+    @Override
+    double calculateArea() {
+        return width * height;
+    }
+}
+
+class Triangle extends Shape {
+    private double base;
+    private double height;
+    
+    public Triangle(double base, double height) {
+        this.base = base;
+        this.height = height;
+    }
+    
+    @Override
+    double calculateArea() {
+        return 0.5 * base * height;
+    }
+}
+
+// Пример полиморфизма в действии
+public class PolymorphismExample {
+    public static void main(String[] args) {
+        // Создаем массив объектов разного типа, но одного базового класса
+        Shape[] shapes = {
+            new Circle(5.0),
+            new Rectangle(4.0, 6.0),
+            new Triangle(3.0, 4.0),
+            new Circle(2.0),
+            new Rectangle(3.0, 3.0)
+        };
+        
+        // Демонстрация полиморфизма
+        System.out.println("=== Полиморфный вызов методов ===");
+        double totalArea = 0;
+        
+        for (Shape shape : shapes) {
+            // Один интерфейс (calculateArea) - много реализаций
+            double area = shape.calculateArea();
+            String shapeType = shape.getClass().getSimpleName();
+            
+            System.out.printf("%s: площадь = %.2f\n", shapeType, area);
+            totalArea += area;
+        }
+        
+        System.out.printf("\nОбщая площадь всех фигур: %.2f\n", totalArea);
+        
+        // Еще один пример с общим методом
+        System.out.println("\n=== Работа с фигурами через общий метод ===");
+        printShapeInfo(new Circle(3.0));
+        printShapeInfo(new Rectangle(2.0, 5.0));
+        printShapeInfo(new Triangle(6.0, 4.0));
+    }
+    
+    // Метод работает с любым объектом типа Shape благодаря полиморфизму
+    public static void printShapeInfo(Shape shape) {
+        String type = shape.getClass().getSimpleName();
+        double area = shape.calculateArea(); // Вызывается соответствующая реализация
+        System.out.printf("Фигура: %s, Площадь: %.2f\n", type, area);
+    }
+}
