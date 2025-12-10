@@ -1,0 +1,552 @@
+import java.util.*;
+
+// Перечисление для мастей карт
+enum Suit {
+    HEARTS("♥", "Черви"),
+    DIAMONDS("♦", "Бубны"),
+    CLUBS("♣", "Трефы"),
+    SPADES("♠", "Пики");
+    
+    private final String symbol;
+    private final String russianName;
+    
+    Suit(String symbol, String russianName) {
+        this.symbol = symbol;
+        this.russianName = russianName;
+    }
+    
+    public String getSymbol() {
+        return symbol;
+    }
+    
+    public String getRussianName() {
+        return russianName;
+    }
+}
+
+// Перечисление для достоинств карт
+enum Rank {
+    TWO("2", 2),
+    THREE("3", 3),
+    FOUR("4", 4),
+    FIVE("5", 5),
+    SIX("6", 6),
+    SEVEN("7", 7),
+    EIGHT("8", 8),
+    NINE("9", 9),
+    TEN("10", 10),
+    JACK("Валет", 11),
+    QUEEN("Дама", 12),
+    KING("Король", 13),
+    ACE("Туз", 14);
+    
+    private final String name;
+    private final int value;
+    
+    Rank(String name, int value) {
+        this.name = name;
+        this.value = value;
+    }
+    
+    public String getName() {
+        return name;
+    }
+    
+    public int getValue() {
+        return value;
+    }
+}
+
+// Класс, представляющий одну карту
+class Card {
+    private final Suit suit;
+    private final Rank rank;
+    private final String id; // Уникальный идентификатор для контроля дублирования
+    
+    public Card(Suit suit, Rank rank) {
+        this.suit = suit;
+        this.rank = rank;
+        this.id = suit.name() + "_" + rank.name();
+    }
+    
+    public Suit getSuit() {
+        return suit;
+    }
+    
+    public Rank getRank() {
+        return rank;
+    }
+    
+    public String getId() {
+        return id;
+    }
+    
+    public int getValue() {
+        return rank.getValue();
+    }
+    
+    @Override
+    public String toString() {
+        return rank.getName() + " " + suit.getSymbol();
+    }
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Card card = (Card) o;
+        return id.equals(card.id);
+    }
+    
+    @Override
+    public int hashCode() {
+        return id.hashCode();
+    }
+}
+
+// Исключение для ситуации с пустой колодой
+class EmptyDeckException extends Exception {
+    public EmptyDeckException(String message) {
+        super(message);
+    }
+}
+
+// Исключение для попытки добавления дубликата карты
+class DuplicateCardException extends Exception {
+    private final Card duplicateCard;
+    
+    public DuplicateCardException(String message, Card duplicateCard) {
+        super(message);
+        this.duplicateCard = duplicateCard;
+    }
+    
+    public Card getDuplicateCard() {
+        return duplicateCard;
+    }
+}
+
+// Интерфейс для игровой колоды
+interface CardDeck {
+    void shuffle(); // Перетасовать колоду
+    Card dealCard() throws EmptyDeckException; // Сдать одну карту
+    List<Card> dealCards(int count) throws EmptyDeckException; // Сдать несколько карт
+    void returnCard(Card card) throws DuplicateCardException; // Вернуть карту в колоду
+    void returnCards(Collection<Card> cards) throws DuplicateCardException; // Вернуть несколько карт
+    int size(); // Количество карт в колоде
+    boolean isEmpty(); // Проверка на пустоту
+    void reset(); // Восстановить полную колоду
+}
+
+// Реализация стандартной колоды из 52 карт
+class StandardDeck implements CardDeck {
+    private final List<Card> cards;
+    private final Set<String> cardIds; // Для быстрой проверки дублирования
+    
+    public StandardDeck() {
+        this.cards = new ArrayList<>();
+        this.cardIds = new HashSet<>();
+        initializeDeck();
+    }
+    
+    // Инициализация полной колоды
+    private void initializeDeck() {
+        cards.clear();
+        cardIds.clear();
+        
+        for (Suit suit : Suit.values()) {
+            for (Rank rank : Rank.values()) {
+                Card card = new Card(suit, rank);
+                cards.add(card);
+                cardIds.add(card.getId());
+            }
+        }
+    }
+    
+    @Override
+    public void shuffle() {
+        Collections.shuffle(cards);
+        System.out.println("Колода перетасована");
+    }
+    
+    @Override
+    public Card dealCard() throws EmptyDeckException {
+        if (cards.isEmpty()) {
+            throw new EmptyDeckException("Невозможно сдать карту: колода пуста!");
+        }
+        
+        Card card = cards.remove(cards.size() - 1); // Снимаем с конца для эффективности
+        cardIds.remove(card.getId());
+        System.out.println("Сдана карта: " + card);
+        return card;
+    }
+    
+    @Override
+    public List<Card> dealCards(int count) throws EmptyDeckException {
+        if (count <= 0) {
+            return new ArrayList<>();
+        }
+        
+        if (cards.size() < count) {
+            throw new EmptyDeckException(
+                String.format("Недостаточно карт в колоде: запрошено %d, доступно %d", 
+                              count, cards.size())
+            );
+        }
+        
+        List<Card> dealtCards = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Card card = cards.remove(cards.size() - 1);
+            cardIds.remove(card.getId());
+            dealtCards.add(card);
+        }
+        
+        System.out.printf("Сдано %d карт: %s%n", count, dealtCards);
+        return dealtCards;
+    }
+    
+    @Override
+    public void returnCard(Card card) throws DuplicateCardException {
+        if (cardIds.contains(card.getId())) {
+            throw new DuplicateCardException(
+                String.format("Карта %s уже есть в колоде!", card), 
+                card
+            );
+        }
+        
+        cards.add(card);
+        cardIds.add(card.getId());
+        System.out.println("Карта возвращена в колоду: " + card);
+    }
+    
+    @Override
+    public void returnCards(Collection<Card> cardsToReturn) throws DuplicateCardException {
+        // Сначала проверяем все карты на дублирование
+        for (Card card : cardsToReturn) {
+            if (cardIds.contains(card.getId())) {
+                throw new DuplicateCardException(
+                    String.format("Карта %s уже есть в колоде!", card),
+                    card
+                );
+            }
+        }
+        
+        // Затем добавляем все карты
+        for (Card card : cardsToReturn) {
+            cards.add(card);
+            cardIds.add(card.getId());
+        }
+        
+        System.out.printf("Возвращено %d карт в колоду%n", cardsToReturn.size());
+    }
+    
+    @Override
+    public int size() {
+        return cards.size();
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return cards.isEmpty();
+    }
+    
+    @Override
+    public void reset() {
+        initializeDeck();
+        System.out.println("Колода восстановлена (52 карты)");
+    }
+    
+    // Метод для просмотра колоды без изменения
+    public void displayDeck() {
+        System.out.println("\nСостояние колоды (" + cards.size() + " карт):");
+        
+        // Группируем карты по мастям для красивого вывода
+        Map<Suit, List<Card>> cardsBySuit = new LinkedHashMap<>();
+        for (Suit suit : Suit.values()) {
+            cardsBySuit.put(suit, new ArrayList<>());
+        }
+        
+        for (Card card : cards) {
+            cardsBySuit.get(card.getSuit()).add(card);
+        }
+        
+        for (Map.Entry<Suit, List<Card>> entry : cardsBySuit.entrySet()) {
+            if (!entry.getValue().isEmpty()) {
+                System.out.print(entry.getKey().getRussianName() + " " + 
+                               entry.getKey().getSymbol() + ": ");
+                
+                // Сортируем карты по достоинству
+                entry.getValue().sort(Comparator.comparingInt(Card::getValue));
+                
+                List<String> cardNames = new ArrayList<>();
+                for (Card card : entry.getValue()) {
+                    cardNames.add(card.getRank().getName());
+                }
+                
+                System.out.println(String.join(", ", cardNames));
+            }
+        }
+    }
+    
+    // Метод для тасовки с заданным seed (для тестирования)
+    public void shuffle(long seed) {
+        Collections.shuffle(cards, new Random(seed));
+        System.out.println("Колода перетасована с seed=" + seed);
+    }
+}
+
+// Класс, представляющий руку игрока
+class Hand {
+    private final String playerName;
+    private final List<Card> cards;
+    
+    public Hand(String playerName) {
+        this.playerName = playerName;
+        this.cards = new ArrayList<>();
+    }
+    
+    public void addCard(Card card) {
+        cards.add(card);
+    }
+    
+    public void addCards(Collection<Card> cards) {
+        this.cards.addAll(cards);
+    }
+    
+    public Card removeCard(Card card) {
+        if (cards.remove(card)) {
+            return card;
+        }
+        return null;
+    }
+    
+    public List<Card> returnAllCards() {
+        List<Card> returnedCards = new ArrayList<>(cards);
+        cards.clear();
+        return returnedCards;
+    }
+    
+    public void sortBySuit() {
+        cards.sort(Comparator.comparing(Card::getSuit)
+                           .thenComparing(Card::getValue));
+    }
+    
+    public void sortByRank() {
+        cards.sort(Comparator.comparing(Card::getValue)
+                           .thenComparing(Card::getSuit));
+    }
+    
+    public int size() {
+        return cards.size();
+    }
+    
+    public void display() {
+        System.out.println("\nРука игрока " + playerName + " (" + cards.size() + " карт):");
+        if (cards.isEmpty()) {
+            System.out.println("  Пустая");
+        } else {
+            for (int i = 0; i < cards.size(); i++) {
+                System.out.printf("  %d. %s%n", i + 1, cards.get(i));
+            }
+        }
+    }
+    
+    // Подсчет очков по простым правилам (для блэкджека)
+    public int calculateBlackjackPoints() {
+        int points = 0;
+        int aces = 0;
+        
+        for (Card card : cards) {
+            int value = card.getValue();
+            if (value >= 10) {
+                points += 10; // Валет, Дама, Король = 10
+            } else if (value == 14) {
+                points += 11; // Туз = 11 (пока)
+                aces++;
+            } else {
+                points += value; // 2-10
+            }
+        }
+        
+        // Корректируем тузы, если сумма > 21
+        while (points > 21 && aces > 0) {
+            points -= 10; // Туз становится 1 вместо 11
+            aces--;
+        }
+        
+        return points;
+    }
+}
+
+// Демонстрационная программа
+public class CardDeckSystem {
+    public static void main(String[] args) {
+        System.out.println("══════════════════════════════════════════════");
+        System.out.println("      СИСТЕМА УПРАВЛЕНИЯ КОЛОДОЙ КАРТ         ");
+        System.out.println("══════════════════════════════════════════════");
+        
+        // Создаем колоду
+        StandardDeck deck = new StandardDeck();
+        deck.displayDeck();
+        System.out.println("\nНачальное количество карт: " + deck.size());
+        
+        // Создаем руки игроков
+        Hand player1 = new Hand("Алексей");
+        Hand player2 = new Hand("Мария");
+        Hand dealer = new Hand("Дилер");
+        
+        try {
+            System.out.println("\n══════════════════════════════════════════════");
+            System.out.println("             ТЕСТИРОВАНИЕ КОЛОДЫ               ");
+            System.out.println("══════════════════════════════════════════════");
+            
+            // 1. Тасуем колоду
+            deck.shuffle();
+            deck.displayDeck();
+            
+            // 2. Раздаем карты игрокам
+            System.out.println("\n--- Раздача карт ---");
+            
+            // Первому игроку - 2 карты
+            List<Card> cards1 = deck.dealCards(2);
+            player1.addCards(cards1);
+            
+            // Второму игроку - 2 карты
+            List<Card> cards2 = deck.dealCards(2);
+            player2.addCards(cards2);
+            
+            // Дилеру - 1 карта
+            Card dealerCard = deck.dealCard();
+            dealer.addCard(dealerCard);
+            
+            // Показываем руки
+            player1.display();
+            player2.display();
+            dealer.display();
+            
+            System.out.println("\nОсталось в колоде: " + deck.size() + " карт");
+            
+            // 3. Тестируем возврат карт
+            System.out.println("\n══════════════════════════════════════════════");
+            System.out.println("         ТЕСТИРОВАНИЕ ВОЗВРАТА КАРТ            ");
+            System.out.println("══════════════════════════════════════════════");
+            
+            // Игрок 1 возвращает одну карту
+            if (player1.size() > 0) {
+                Card cardToReturn = player1.removeCard(cards1.get(0));
+                if (cardToReturn != null) {
+                    deck.returnCard(cardToReturn);
+                    System.out.println("Игрок 1 вернул карту: " + cardToReturn);
+                }
+            }
+            
+            player1.display();
+            System.out.println("В колоде после возврата: " + deck.size() + " карт");
+            
+            // 4. Тестируем дублирование карт
+            System.out.println("\n══════════════════════════════════════════════");
+            System.out.println("    ТЕСТИРОВАНИЕ КОНТРОЛЯ ДУБЛИРОВАНИЯ         ");
+            System.out.println("══════════════════════════════════════════════");
+            
+            try {
+                // Пробуем вернуть карту, которая все еще у игрока 2
+                Card duplicateCard = cards2.get(0);
+                deck.returnCard(duplicateCard);
+            } catch (DuplicateCardException e) {
+                System.out.println("Ошибка перехвачена: " + e.getMessage());
+                System.out.println("Дублирующая карта: " + e.getDuplicateCard());
+            }
+            
+            // 5. Тестируем пустую колоду
+            System.out.println("\n══════════════════════════════════════════════");
+            System.out.println("     ТЕСТИРОВАНИЕ ПУСТОЙ КОЛОДЫ                ");
+            System.out.println("══════════════════════════════════════════════");
+            
+            // Раздаем все оставшиеся карты
+            int remaining = deck.size();
+            System.out.println("Раздаем оставшиеся " + remaining + " карт...");
+            
+            try {
+                List<Card> allRemaining = deck.dealCards(remaining);
+                dealer.addCards(allRemaining);
+                System.out.println("Все карты разданы");
+            } catch (EmptyDeckException e) {
+                System.out.println("Ошибка: " + e.getMessage());
+            }
+            
+            System.out.println("Карт в колоде: " + deck.size());
+            
+            // Пробуем сдать еще одну карту из пустой колоды
+            try {
+                deck.dealCard();
+            } catch (EmptyDeckException e) {
+                System.out.println("Ошибка перехвачена: " + e.getMessage());
+            }
+            
+            // 6. Восстанавливаем колоду
+            System.out.println("\n══════════════════════════════════════════════");
+            System.out.println("     ВОССТАНОВЛЕНИЕ КОЛОДЫ                     ");
+            System.out.println("══════════════════════════════════════════════");
+            
+            // Возвращаем все карты от дилера
+            List<Card> dealerCards = dealer.returnAllCards();
+            deck.returnCards(dealerCards);
+            
+            // Возвращаем карты от игроков
+            deck.returnCards(player1.returnAllCards());
+            deck.returnCards(player2.returnAllCards());
+            
+            System.out.println("Все карты возвращены в колоду");
+            System.out.println("Карт в колоде: " + deck.size());
+            
+            deck.displayDeck();
+            
+            // 7. Демонстрация игры в Блэкджек
+            System.out.println("\n══════════════════════════════════════════════");
+            System.out.println("     ДЕМОНСТРАЦИЯ ИГРЫ В БЛЭКДЖЕК              ");
+            System.out.println("══════════════════════════════════════════════");
+            
+            deck.reset();
+            deck.shuffle();
+            
+            // Создаем новые руки
+            Hand blackjackPlayer = new Hand("Игрок");
+            Hand blackjackDealer = new Hand("Дилер");
+            
+            // Раздача начальных карт
+            blackjackPlayer.addCards(deck.dealCards(2));
+            blackjackDealer.addCards(deck.dealCards(2));
+            
+            // Показываем карты
+            System.out.println("\nНачальная раздача:");
+            blackjackPlayer.display();
+            System.out.println("Очки игрока: " + blackjackPlayer.calculateBlackjackPoints());
+            
+            System.out.print("Карты дилера: ");
+            System.out.println(blackjackDealer.returnAllCards().get(0) + " и [скрытая]");
+            
+            // Игрок берет еще карту
+            System.out.println("\nИгрок берет еще одну карту...");
+            blackjackPlayer.addCard(deck.dealCard());
+            blackjackPlayer.display();
+            
+            int playerPoints = blackjackPlayer.calculateBlackjackPoints();
+            System.out.println("Очки игрока: " + playerPoints);
+            
+            if (playerPoints > 21) {
+                System.out.println("Перебор! Игрок проиграл.");
+            } else if (playerPoints == 21) {
+                System.out.println("Блэкджек! Игрок выиграл.");
+            } else {
+                System.out.println("Игрок останавливается на " + playerPoints + " очках.");
+            }
+            
+        } catch (EmptyDeckException | DuplicateCardException e) {
+            System.out.println("Критическая ошибка: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        System.out.println("\n══════════════════════════════════════════════");
+        System.out.println("      ПРОГРАММА ЗАВЕРШЕНА                      ");
+        System.out.println("══════════════════════════════════════════════");
+    }
+}
