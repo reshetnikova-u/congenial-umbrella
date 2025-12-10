@@ -1,0 +1,31 @@
+zoo/
+├── animals/
+│   ├── abstract/
+│   │   ├── Animal.java
+│   │   ├── Bird.java
+│   │   └── Mammal.java
+│   ├── interfaces/
+│   │   ├── Flyable.java
+│   │   ├── Swimmable.java
+│   │   ├── Runnable.java
+│   │   └── Soundable.java
+│   └── concrete/
+│       ├── Lion.java
+│       ├── Elephant.java
+│       ├── Penguin.java
+│       ├── Parrot.java
+│       ├── Dolphin.java
+│       └── Monkey.java
+├── employees/
+│   ├── abstract/
+│   │   └── Employee.java
+│   └── concrete/
+│       ├── Zookeeper.java
+│       ├── Veterinarian.java
+│       └── TourGuide.java
+├── enclosures/
+│   ├── Enclosure.java
+│   ├── Cage.java
+│   └── Aquarium.java
+└── main/
+    └── ZooGame.java
